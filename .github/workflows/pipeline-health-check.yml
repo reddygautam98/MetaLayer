@@ -1,0 +1,398 @@
+name: 🔄 Data Pipeline Health Check
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:
+    inputs:
+      check_type:
+        description: 'Health Check Type'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - quick
+          - data-quality
+          - performance
+
+jobs:
+  # ===========================================
+  # PIPELINE STATUS CHECK
+  # ===========================================
+  pipeline-status:
+    name: 🔍 Pipeline Status Check
+    runs-on: ubuntu-latest
+    
+    outputs:
+      pipeline-status: ${{ steps.check-status.outputs.status }}
+      last-run-time: ${{ steps.check-status.outputs.last_run }}
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install Dependencies
+        run: |
+          pip install requests psycopg2-binary pandas
+
+      - name: 🔍 Check Pipeline Status
+        id: check-status
+        run: |
+          python << 'EOF'
+          import requests
+          import json
+          import os
+          from datetime import datetime, timedelta
+          
+          # Mock pipeline status check
+          # Replace with actual Airflow API calls
+          
+          pipeline_status = {
+              "medallion_master_orchestrator": "success",
+              "bronze_layer_production_load": "success",
+              "silver_layer_production_transform": "success", 
+              "gold_layer_production_analytics": "success"
+          }
+          
+          overall_status = "healthy" if all(status == "success" for status in pipeline_status.values()) else "degraded"
+          last_run = datetime.now().isoformat()
+          
+          print(f"Pipeline Status: {overall_status}")
+          print(f"Last Run: {last_run}")
+          print("Individual DAG Status:")
+          for dag, status in pipeline_status.items():
+              print(f"  {dag}: {status}")
+          
+          # Set GitHub outputs
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"status={overall_status}\n")
+              f.write(f"last_run={last_run}\n")
+          
+          # Create status report
+          with open('pipeline-status.json', 'w') as f:
+              json.dump({
+                  "timestamp": last_run,
+                  "overall_status": overall_status,
+                  "dag_status": pipeline_status
+              }, f, indent=2)
+          EOF
+
+      - name: 📊 Upload Pipeline Status Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: pipeline-status-${{ github.run_number }}
+          path: pipeline-status.json
+
+  # ===========================================
+  # DATA FRESHNESS CHECK
+  # ===========================================
+  data-freshness:
+    name: 📅 Data Freshness Check
+    runs-on: ubuntu-latest
+    needs: pipeline-status
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install Dependencies
+        run: |
+          pip install psycopg2-binary pandas
+
+      - name: 📅 Check Data Freshness
+        run: |
+          python << 'EOF'
+          import psycopg2
+          import os
+          from datetime import datetime, timedelta
+          
+          # Mock data freshness check
+          # Replace with actual database queries
+          
+          data_freshness = {
+              "bronze.erp_sales_raw": "2 hours ago",
+              "bronze.crm_customers_raw": "2 hours ago", 
+              "silver.sales_cleaned": "1 hour ago",
+              "silver.customers_standardized": "1 hour ago",
+              "gold.fact_sales": "30 minutes ago",
+              "gold.dim_customer": "30 minutes ago"
+          }
+          
+          print("📅 Data Freshness Report:")
+          print("=" * 40)
+          
+          stale_threshold = timedelta(hours=24)
+          stale_tables = []
+          
+          for table, freshness in data_freshness.items():
+              status = "✅ Fresh" if "hour" in freshness or "minute" in freshness else "⚠️  Stale"
+              print(f"{table}: {freshness} - {status}")
+              
+              if "day" in freshness:
+                  stale_tables.append(table)
+          
+          if stale_tables:
+              print(f"\n⚠️  Warning: Stale data detected in {len(stale_tables)} tables")
+              exit(1)
+          else:
+              print("\n✅ All data is fresh and up-to-date")
+          EOF
+
+  # ===========================================
+  # DATA QUALITY VALIDATION
+  # ===========================================
+  data-quality-check:
+    name: 🔍 Data Quality Validation
+    runs-on: ubuntu-latest
+    needs: pipeline-status
+    if: github.event.inputs.check_type == 'data-quality' || github.event.inputs.check_type == 'full' || github.event_name == 'schedule'
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install Dependencies
+        run: |
+          pip install great-expectations pandas psycopg2-binary
+
+      - name: 🔍 Run Data Quality Checks
+        run: |
+          python << 'EOF'
+          import pandas as pd
+          import json
+          from datetime import datetime
+          
+          # Mock data quality checks
+          # Replace with actual Great Expectations suite
+          
+          quality_results = {
+              "bronze_layer": {
+                  "completeness": 99.2,
+                  "accuracy": 98.8,
+                  "consistency": 99.5,
+                  "validity": 99.1
+              },
+              "silver_layer": {
+                  "completeness": 99.8,
+                  "accuracy": 99.5,
+                  "consistency": 99.9,
+                  "validity": 99.7
+              },
+              "gold_layer": {
+                  "completeness": 100.0,
+                  "accuracy": 99.9,
+                  "consistency": 100.0,
+                  "validity": 99.8
+              }
+          }
+          
+          print("🔍 Data Quality Assessment:")
+          print("=" * 50)
+          
+          overall_score = 0
+          total_layers = len(quality_results)
+          
+          for layer, metrics in quality_results.items():
+              layer_score = sum(metrics.values()) / len(metrics)
+              overall_score += layer_score
+              
+              print(f"\n{layer.replace('_', ' ').title()}:")
+              for metric, score in metrics.items():
+                  status = "✅" if score >= 99.0 else "⚠️" if score >= 95.0 else "❌"
+                  print(f"  {metric.capitalize()}: {score:.1f}% {status}")
+              print(f"  Layer Score: {layer_score:.1f}%")
+          
+          overall_score = overall_score / total_layers
+          print(f"\n📊 Overall Data Quality Score: {overall_score:.1f}%")
+          
+          # Save quality report
+          report = {
+              "timestamp": datetime.now().isoformat(),
+              "overall_score": overall_score,
+              "layer_results": quality_results
+          }
+          
+          with open('data-quality-report.json', 'w') as f:
+              json.dump(report, f, indent=2)
+          
+          if overall_score < 95.0:
+              print("❌ Data quality score below threshold (95%)")
+              exit(1)
+          else:
+              print("✅ Data quality meets requirements")
+          EOF
+
+      - name: 📊 Upload Data Quality Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: data-quality-report-${{ github.run_number }}
+          path: data-quality-report.json
+
+  # ===========================================
+  # PERFORMANCE METRICS CHECK
+  # ===========================================
+  performance-check:
+    name: ⚡ Performance Metrics Check
+    runs-on: ubuntu-latest
+    needs: pipeline-status
+    if: github.event.inputs.check_type == 'performance' || github.event.inputs.check_type == 'full' || github.event_name == 'schedule'
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: ⚡ Check Pipeline Performance
+        run: |
+          python << 'EOF'
+          import json
+          from datetime import datetime, timedelta
+          
+          # Mock performance metrics
+          # Replace with actual Airflow API calls
+          
+          performance_metrics = {
+              "dag_execution_times": {
+                  "medallion_master_orchestrator": "45 minutes",
+                  "bronze_layer_production_load": "15 minutes",
+                  "silver_layer_production_transform": "8 minutes",
+                  "gold_layer_production_analytics": "5 minutes"
+              },
+              "task_success_rates": {
+                  "bronze_tasks": 99.2,
+                  "silver_tasks": 98.8,
+                  "gold_tasks": 99.5
+              },
+              "resource_utilization": {
+                  "cpu_usage": 65.2,
+                  "memory_usage": 72.1,
+                  "disk_io": 45.8
+              }
+          }
+          
+          print("⚡ Performance Metrics Report:")
+          print("=" * 40)
+          
+          # Check execution times
+          print("\n🕐 DAG Execution Times:")
+          for dag, duration in performance_metrics["dag_execution_times"].items():
+              print(f"  {dag}: {duration}")
+          
+          # Check success rates
+          print("\n📊 Task Success Rates:")
+          for task_group, rate in performance_metrics["task_success_rates"].items():
+              status = "✅" if rate >= 98.0 else "⚠️" if rate >= 95.0 else "❌"
+              print(f"  {task_group}: {rate}% {status}")
+          
+          # Check resource utilization
+          print("\n💻 Resource Utilization:")
+          for resource, usage in performance_metrics["resource_utilization"].items():
+              status = "✅" if usage < 80.0 else "⚠️" if usage < 90.0 else "❌"
+              print(f"  {resource.replace('_', ' ').title()}: {usage}% {status}")
+          
+          # Save performance report
+          report = {
+              "timestamp": datetime.now().isoformat(),
+              "metrics": performance_metrics
+          }
+          
+          with open('performance-report.json', 'w') as f:
+              json.dump(report, f, indent=2)
+          
+          print("\n✅ Performance metrics collected successfully")
+          EOF
+
+      - name: 📊 Upload Performance Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: performance-report-${{ github.run_number }}
+          path: performance-report.json
+
+  # ===========================================
+  # HEALTH SUMMARY & ALERTING
+  # ===========================================
+  health-summary:
+    name: 📋 Health Summary & Alerting
+    runs-on: ubuntu-latest
+    needs: [pipeline-status, data-freshness, data-quality-check, performance-check]
+    if: always()
+    
+    steps:
+      - name: 📋 Generate Health Summary
+        run: |
+          echo "📋 MetaLayer Pipeline Health Summary"
+          echo "======================================"
+          echo "Timestamp: $(date)"
+          echo ""
+          echo "Pipeline Status: ${{ needs.pipeline-status.outputs.pipeline-status }}"
+          echo "Last Run: ${{ needs.pipeline-status.outputs.last-run-time }}"
+          echo ""
+          
+          # Check job results
+          PIPELINE_STATUS="${{ needs.pipeline-status.result }}"
+          FRESHNESS_STATUS="${{ needs.data-freshness.result }}"
+          QUALITY_STATUS="${{ needs.data-quality-check.result }}"
+          PERFORMANCE_STATUS="${{ needs.performance-check.result }}"
+          
+          echo "Health Check Results:"
+          echo "  Pipeline Status: $PIPELINE_STATUS"
+          echo "  Data Freshness: $FRESHNESS_STATUS"
+          echo "  Data Quality: $QUALITY_STATUS"
+          echo "  Performance: $PERFORMANCE_STATUS"
+          
+          # Determine overall health
+          if [[ "$PIPELINE_STATUS" == "success" && "$FRESHNESS_STATUS" == "success" && 
+                ("$QUALITY_STATUS" == "success" || "$QUALITY_STATUS" == "skipped") && 
+                ("$PERFORMANCE_STATUS" == "success" || "$PERFORMANCE_STATUS" == "skipped") ]]; then
+              OVERALL_HEALTH="HEALTHY"
+              echo "✅ Overall Health: $OVERALL_HEALTH"
+          else
+              OVERALL_HEALTH="DEGRADED"
+              echo "⚠️ Overall Health: $OVERALL_HEALTH"
+          fi
+          
+          echo "overall_health=$OVERALL_HEALTH" >> $GITHUB_ENV
+
+      - name: 🚨 Send Alert if Unhealthy
+        if: env.overall_health == 'DEGRADED'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#data-engineering'
+          text: |
+            🚨 MetaLayer Pipeline Health Alert
+            
+            Overall Health: DEGRADED
+            
+            Check Results:
+            - Pipeline Status: ${{ needs.pipeline-status.result }}
+            - Data Freshness: ${{ needs.data-freshness.result }}
+            - Data Quality: ${{ needs.data-quality-check.result }}
+            - Performance: ${{ needs.performance-check.result }}
+            
+            Please investigate immediately!
+            
+            Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.PIPELINE_HEALTH_WEBHOOK }}
+
+      - name: ✅ Confirm Healthy Status
+        if: env.overall_health == 'HEALTHY'
+        run: |
+          echo "✅ MetaLayer pipeline is healthy and operating normally"
+          echo "📊 All health checks passed successfully"

@@ -1,0 +1,252 @@
+# Data Quality & Testing Workflow
+name: Data Quality Testing
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'dags/**'
+      - 'include/**'
+      - 'tests/**'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'dags/**'
+      - 'include/**'
+      - 'tests/**'
+  schedule:
+    - cron: '0 6 * * 1-5'  # Run weekdays at 6 AM UTC
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.11'
+  POSTGRES_VERSION: '15'
+
+jobs:
+  # ==============================================================================
+  # DAG TESTING
+  # ==============================================================================
+  dag-tests:
+    name: DAG Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_USER: test_user
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install apache-airflow==2.8.0
+        pip install -r requirements.txt
+        pip install pytest pytest-cov pytest-mock pytest-airflow
+        
+    - name: Setup Airflow Test Environment
+      run: |
+        export AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://test_user:test_password@localhost:5432/test_db
+        export AIRFLOW__CORE__LOAD_EXAMPLES=false
+        export AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
+        export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/include"
+        
+        # Initialize Airflow DB
+        airflow db init
+        
+        # Create test data directory
+        mkdir -p /tmp/test_data
+        
+    - name: Run DAG Import Tests
+      run: |
+        export AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://test_user:test_password@localhost:5432/test_db
+        export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/include"
+        
+        echo "Testing DAG imports..."
+        if [ -f "tests/dags/test_dag_imports.py" ]; then
+          python -m pytest tests/dags/test_dag_imports.py -v --tb=short
+        else
+          echo "No DAG import tests found, skipping..."
+        fi
+        
+    - name: Run DAG Structure Tests
+      run: |
+        export AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://test_user:test_password@localhost:5432/test_db
+        export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/include"
+        
+        echo "Testing DAG structure and configuration..."
+        if [ -f "tests/dags/test_dag_structure.py" ]; then
+          python -m pytest tests/dags/test_dag_structure.py -v --tb=short
+        else
+          echo "No DAG structure tests found, skipping..."
+        fi
+        
+    - name: Run Task Tests
+      run: |
+        export AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://test_user:test_password@localhost:5432/test_db
+        export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/include"
+        
+        echo "Testing individual tasks..."
+        if [ -f "tests/dags/test_tasks.py" ]; then
+          python -m pytest tests/dags/test_tasks.py -v --tb=short --cov=dags --cov-report=xml
+        else
+          echo "No task tests found, skipping..."
+        fi
+        
+    - name: Upload Test Coverage
+      uses: codecov/codecov-action@v3
+      if: always()
+      with:
+        file: ./coverage.xml
+        flags: dag-tests
+        name: dag-coverage
+
+  # ==============================================================================
+  # DATA QUALITY TESTING
+  # ==============================================================================
+  data-quality-tests:
+    name: Data Quality Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: dq_password
+          POSTGRES_USER: dq_user  
+          POSTGRES_DB: dq_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install great-expectations pytest
+        
+    - name: Setup Test Database
+      run: |
+        export PGPASSWORD=dq_password
+        
+        # Create schemas
+        psql -h localhost -U dq_user -d dq_test -c "
+          CREATE SCHEMA IF NOT EXISTS bronze;
+          CREATE SCHEMA IF NOT EXISTS silver;
+          CREATE SCHEMA IF NOT EXISTS gold;
+        "
+        
+        # Create sample test tables if SQL file exists
+        if [ -f "tests/data_quality/create_sample_data.sql" ]; then
+          psql -h localhost -U dq_user -d dq_test -f tests/data_quality/create_sample_data.sql
+        else
+          echo "No sample data SQL found, creating basic test tables..."
+          psql -h localhost -U dq_user -d dq_test -c "
+            CREATE TABLE IF NOT EXISTS bronze.test_table (
+              id SERIAL PRIMARY KEY,
+              name VARCHAR(100),
+              created_at TIMESTAMP DEFAULT NOW()
+            );
+            INSERT INTO bronze.test_table (name) VALUES ('test1'), ('test2'), ('test3');
+          "
+        fi
+        
+    - name: Run Data Quality Checks
+      run: |
+        export DB_CONNECTION_STRING=postgresql://dq_user:dq_password@localhost:5432/dq_test
+        export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/include"
+        
+        echo "Running data quality validation tests..."
+        if [ -f "tests/data_quality/test_data_quality.py" ]; then
+          python -m pytest tests/data_quality/test_data_quality.py -v --tb=short
+        else
+          echo "No data quality tests found, skipping..."
+        fi
+        
+    - name: Upload Data Quality Reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: data-quality-reports
+        path: |
+          tests/data_quality/reports/
+          great_expectations/uncommitted/
+        retention-days: 30
+
+  # ==============================================================================
+  # TEST REPORTING
+  # ==============================================================================
+  test-summary:
+    name: Test Summary Report
+    runs-on: ubuntu-latest
+    needs: [dag-tests, data-quality-tests]
+    if: always()
+    
+    steps:
+    - name: Generate Test Summary
+      run: |
+        echo "## Test Execution Summary" >> test-summary.md
+        echo "Generated on: $(date)" >> test-summary.md
+        echo "" >> test-summary.md
+        
+        echo "### Test Results" >> test-summary.md
+        echo "| Test Suite | Status |" >> test-summary.md
+        echo "|------------|--------|" >> test-summary.md
+        echo "| DAG Tests | ${{ needs.dag-tests.result == 'success' && '✅ PASS' || '❌ FAIL' }} |" >> test-summary.md
+        echo "| Data Quality | ${{ needs.data-quality-tests.result == 'success' && '✅ PASS' || '❌ FAIL' }} |" >> test-summary.md  
+        echo "" >> test-summary.md
+        
+        # Calculate overall status
+        overall_status="✅ PASS"
+        if [[ "${{ needs.dag-tests.result }}" == "failure" || "${{ needs.data-quality-tests.result }}" == "failure" ]]; then
+          overall_status="❌ FAIL"
+        fi
+        
+        echo "### Overall Status: $overall_status" >> test-summary.md
+        echo "" >> test-summary.md
+        echo "**Branch:** ${{ github.ref_name }}" >> test-summary.md
+        echo "**Commit:** ${{ github.sha }}" >> test-summary.md
+        echo "**Triggered by:** ${{ github.actor }}" >> test-summary.md
+        
+        cat test-summary.md
+        
+    - name: Upload Test Summary
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-summary-report
+        path: test-summary.md
+        retention-days: 30

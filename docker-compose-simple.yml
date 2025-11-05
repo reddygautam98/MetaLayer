@@ -1,0 +1,320 @@
+# Simplified MetaLayer Docker Compose for DevOps Troubleshooting# Simplified MetaLayer Docker Compose for DevOps Troubleshooting
+
+# This fixes all the Docker issues systematically# This is a minimal configuration to get core services running
+
+
+
+x-airflow-common:x-airflow-common:
+
+  &airflow-common  &airflow-common
+
+  image: quay.io/astronomer/astro-runtime:12.1.0-base  image: quay.io/astronomer/astro-runtime:12.1.0-base
+
+  environment:  environment:
+
+    &airflow-common-env    &airflow-common-env
+
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB:-airflow}    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB:-airflow}
+
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
+
+    AIRFLOW__CORE__PARALLELISM: 16    AIRFLOW__CORE__PARALLELISM: 16
+
+    AIRFLOW__CORE__DAG_CONCURRENCY: 8    AIRFLOW__CORE__DAG_CONCURRENCY: 8
+
+    AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: 4    AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: 4
+
+    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
+
+  volumes:  volumes:
+
+    - ./dags:/opt/airflow/dags    - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
+
+    - ./logs:/opt/airflow/logs    - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
+
+    - ./config:/opt/airflow/config    - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
+
+    - ./plugins:/opt/airflow/plugins    - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
+
+    - ./include:/opt/airflow/include    - ${AIRFLOW_PROJ_DIR:-.}/include:/opt/airflow/include
+
+    - ./data:/opt/airflow/data    - ${AIRFLOW_PROJ_DIR:-.}/data:/opt/airflow/data
+
+  user: "${AIRFLOW_UID:-50000}:0"  user: "${AIRFLOW_UID:-50000}:0"
+
+  depends_on:  depends_on:
+
+    &airflow-common-depends-on    &airflow-common-depends-on
+
+    postgres:    postgres:
+
+      condition: service_healthy      condition: service_healthy
+
+
+
+services:services:
+
+  postgres:  postgres:
+
+    image: postgres:15    image: postgres:15
+
+    environment:    environment:
+
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+      POSTGRES_DB: ${POSTGRES_DB:-airflow}      POSTGRES_DB: ${POSTGRES_DB:-airflow}
+
+    volumes:    volumes:
+
+      - postgres-db-volume:/var/lib/postgresql/data      - postgres-db-volume:/var/lib/postgresql/data
+
+    ports:    ports:
+
+      - "5433:5432"      - "5433:5432"
+
+    healthcheck:    healthcheck:
+
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-postgres}"]      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-postgres}"]
+
+      interval: 10s      interval: 10s
+
+      retries: 5      retries: 5
+
+      start_period: 5s      start_period: 5s
+
+    restart: always    restart: always
+
+    command:
+
+  init:      - postgres
+
+    <<: *airflow-common      - -c
+
+    entrypoint: /bin/bash      - max_connections=200
+
+    command:      - -c
+
+      - -c      - shared_buffers=256MB
+
+      - |
+
+        echo "🚀 Starting MetaLayer Airflow initialization..."  init:
+
+            <<: *airflow-common
+
+        # Check environment variables    entrypoint: /bin/bash
+
+        if [[ -z "${POSTGRES_PASSWORD}" ]]; then    command:
+
+          echo "❌ ERROR: POSTGRES_PASSWORD is not set!"      - -c
+
+          exit 1      - |
+
+        fi        echo "Starting Airflow initialization..."
+
+                
+
+        # Wait for postgres        # Check if required environment variables are set
+
+        echo "⏳ Waiting for PostgreSQL..."        if [[ -z "${POSTGRES_PASSWORD}" ]]; then
+
+        timeout=60          echo "ERROR: POSTGRES_PASSWORD is not set!"
+
+        while ! nc -z postgres 5432 && [ $timeout -gt 0 ]; do          exit 1
+
+          echo "Waiting... ($timeout seconds remaining)"        fi
+
+          sleep 2        
+
+          timeout=$((timeout-2))        # Wait for postgres to be ready
+
+        done        echo "Waiting for PostgreSQL to be ready..."
+
+                timeout=60
+
+        if [ $timeout -le 0 ]; then        while ! nc -z postgres 5432 && [ $timeout -gt 0 ]; do
+
+          echo "❌ ERROR: PostgreSQL not ready after 60 seconds"          echo "Waiting for PostgreSQL... ($timeout seconds remaining)"
+
+          exit 1          sleep 2
+
+        fi          timeout=$((timeout-2))
+
+                done
+
+        echo "✅ PostgreSQL is ready!"        
+
+                if [ $timeout -le 0 ]; then
+
+        # Create directories          echo "ERROR: PostgreSQL not ready after 60 seconds"
+
+        mkdir -p /sources/logs /sources/dags /sources/plugins          exit 1
+
+        chown -R "${AIRFLOW_UID}:0" /sources/{logs,dags,plugins}        fi
+
+                
+
+        # Initialize Airflow        echo "PostgreSQL is ready!"
+
+        echo "🔧 Upgrading Airflow database..."        
+
+        airflow db migrate        # Initialize Airflow
+
+                mkdir -p /sources/logs /sources/dags /sources/plugins
+
+        echo "👤 Creating Airflow admin user..."        chown -R "${AIRFLOW_UID}:0" /sources/{logs,dags,plugins}
+
+        airflow users create \        
+
+          --username admin \        echo "Upgrading Airflow database..."
+
+          --firstname Admin \        airflow db migrate
+
+          --lastname User \        
+
+          --role Admin \        echo "Creating Airflow admin user..."
+
+          --email admin@metalayer.com \        airflow users create \
+
+          --password admin || echo "User already exists"          --username admin \
+
+                  --firstname Admin \
+
+        echo "🎉 Airflow initialization completed!"          --lastname User \
+
+                  --role Admin \
+
+    environment:          --email admin@example.com \
+
+      <<: *airflow-common-env          --password admin || echo "User already exists"
+
+    user: "0:0"        
+
+    volumes:        echo "Airflow initialization completed successfully!"
+
+      - .:/sources        
+
+    environment:
+
+  webserver:      <<: *airflow-common-env
+
+    <<: *airflow-common      _AIRFLOW_DB_MIGRATE: 'true'
+
+    command: webserver      _AIRFLOW_WWW_USER_CREATE: 'true'
+
+    ports:      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-admin}
+
+      - "${ASTRO_WEBSERVER_PORT:-8081}:8080"      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-admin}
+
+    healthcheck:      _PIP_ADDITIONAL_REQUIREMENTS: ''
+
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]    user: "0:0"
+
+      interval: 30s    volumes:
+
+      timeout: 10s      - ${AIRFLOW_PROJ_DIR:-.}:/sources
+
+      retries: 5
+
+      start_period: 30s  webserver:
+
+    restart: always    <<: *airflow-common
+
+    depends_on:    command: webserver
+
+      <<: *airflow-common-depends-on    ports:
+
+      init:      - "${ASTRO_WEBSERVER_PORT:-8081}:8080"
+
+        condition: service_completed_successfully    healthcheck:
+
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+
+  scheduler:      interval: 30s
+
+    <<: *airflow-common      timeout: 10s
+
+    command: scheduler      retries: 5
+
+    healthcheck:      start_period: 30s
+
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname $HOSTNAME"]    restart: always
+
+      interval: 30s    depends_on:
+
+      timeout: 15s      <<: *airflow-common-depends-on
+
+      retries: 3      init:
+
+      start_period: 60s        condition: service_completed_successfully
+
+    restart: always
+
+    depends_on:  scheduler:
+
+      <<: *airflow-common-depends-on    <<: *airflow-common
+
+      init:    command: scheduler
+
+        condition: service_completed_successfully    healthcheck:
+
+      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}" || exit 1']
+
+volumes:      interval: 30s
+
+  postgres-db-volume:      timeout: 15s
+      retries: 3
+      start_period: 60s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      init:
+        condition: service_completed_successfully
+  #     - ACCEPT_EULA=Y
+  #     - SA_PASSWORD=YourPassword123!
+  #     - MSSQL_PID=Developer
+  #   ports:
+  #     - "1433:1433"
+  #   volumes:
+  #     - mssql_data:/var/opt/mssql
+
+  webserver:
+    build: .
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://postgres:postgres@postgres:5432/postgres
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__WEBSERVER__WEB_SERVER_PORT=8080
+      - AIRFLOW_CONN_POSTGRES_DEFAULT=postgresql://postgres:postgres@postgres:5432/postgres
+    ports:
+      - "8090:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags:z
+      - ./logs:/opt/airflow/logs:z
+      - ./plugins:/opt/airflow/plugins:z
+      - ./include:/opt/airflow/include:z
+      - ./data:/opt/airflow/data:z
+    depends_on:
+      - postgres
+    command: airflow standalone
+
+
+
+volumes:
+  postgres_data:
+  mssql_data:

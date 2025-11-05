@@ -1,0 +1,43 @@
+version: '3.8'
+x-astro-common:
+  &common
+  image: astrocrpublic.azurecr.io/runtime:3.1-3
+  user: astro
+  env_file: .env
+  volumes:
+    - ${PWD}/dags:/opt/airflow/dags:z
+    - ${PWD}/logs:/opt/airflow/logs:z
+    - ${PWD}/plugins:/opt/airflow/plugins:z
+    - ${PWD}/include:/opt/airflow/include:z
+    - ${PWD}/tests:/opt/airflow/tests:z
+    - ${PWD}/airflow_settings.yaml:/opt/airflow/airflow_settings.yaml:z
+
+services:
+  postgres:
+    image: postgres:12.6
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  webserver:
+    <<: *common
+    command: >
+      bash -c "airflow db migrate &&
+               airflow users create --username admin --firstname Admin --lastname User --email admin@example.com --role Admin --password admin || true &&
+               airflow webserver"
+    ports:
+      - "8082:8080"
+    depends_on:
+      - postgres
+
+  scheduler:
+    <<: *common
+    command: airflow scheduler
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:

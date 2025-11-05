@@ -1,0 +1,153 @@
+name: 🧪 Data Quality & Testing
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Daily at 6 AM UTC
+  workflow_dispatch:
+  push:
+    paths:
+      - 'dags/**'
+      - 'include/sql/**'
+      - 'tests/**'
+
+jobs:
+  # ===========================================
+  # DATA VALIDATION TESTS
+  # ===========================================
+  data-validation:
+    name: 🔍 Data Quality Validation
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_airflow
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 📦 Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install great-expectations pytest pandas psycopg2-binary
+
+      - name: 🗄️ Setup Test Database
+        env:
+          PGPASSWORD: test_password
+        run: |
+          # Create test schemas
+          psql -h localhost -U test_user -d test_airflow -c "CREATE SCHEMA IF NOT EXISTS bronze;"
+          psql -h localhost -U test_user -d test_airflow -c "CREATE SCHEMA IF NOT EXISTS silver;"
+          psql -h localhost -U test_user -d test_airflow -c "CREATE SCHEMA IF NOT EXISTS gold;"
+
+      - name: 📊 Create Sample Test Data
+        run: |
+          python tests/data_quality/create_sample_data.py
+
+      - name: 🧪 Run Data Quality Tests
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_airflow
+        run: |
+          python -m pytest tests/data_quality/ -v --tb=short
+
+      - name: 📈 Generate Data Quality Report
+        run: |
+          python tests/data_quality/generate_report.py
+
+      - name: 📊 Upload Data Quality Reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: data-quality-reports
+          path: |
+            reports/data_quality_report.html
+            reports/data_profiling.json
+
+  # ===========================================
+  # SQL VALIDATION
+  # ===========================================
+  sql-validation:
+    name: 📝 SQL Query Validation
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: sql_test_user
+          POSTGRES_PASSWORD: sql_test_password
+          POSTGRES_DB: sql_test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🗄️ Setup Test Database Schema
+        env:
+          PGPASSWORD: sql_test_password
+        run: |
+          # Run all SQL DDL files to validate syntax
+          for sql_file in include/sql/*.sql; do
+            echo "Validating: $sql_file"
+            psql -h localhost -U sql_test_user -d sql_test_db -f "$sql_file" --set ON_ERROR_STOP=1
+          done
+
+      - name: ✅ SQL Syntax Validation Complete
+        run: |
+          echo "✅ All SQL files validated successfully!"
+
+  # ===========================================
+  # PERFORMANCE TESTING
+  # ===========================================
+  performance-test:
+    name: ⚡ Performance Testing
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install Performance Testing Tools
+        run: |
+          pip install locust pandas numpy
+
+      - name: ⚡ Run Performance Tests
+        run: |
+          # Run performance tests for DAG execution
+          python tests/performance/test_dag_performance.py
+
+      - name: 📊 Upload Performance Results
+        uses: actions/upload-artifact@v3
+        with:
+          name: performance-reports
+          path: reports/performance_*.json

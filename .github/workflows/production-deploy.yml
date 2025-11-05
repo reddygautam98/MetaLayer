@@ -1,0 +1,376 @@
+# Production Deployment Workflow
+name: Production Deploy
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target Environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+        - staging
+        - production
+      skip_tests:
+        description: 'Skip test validation'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/metalayer
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  # ==============================================================================
+  # PRE-DEPLOYMENT VALIDATION
+  # ==============================================================================
+  pre-deployment-checks:
+    name: Pre-deployment Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    outputs:
+      should-deploy: ${{ steps.validation.outputs.should-deploy }}
+      target-env: ${{ steps.validation.outputs.target-env }}
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: Validate Deployment Conditions
+      id: validation
+      run: |
+        echo "Validating deployment conditions..."
+        
+        # Determine target environment
+        if [[ "${{ github.event_name }}" == "release" ]]; then
+          TARGET_ENV="production"
+        else
+          TARGET_ENV="${{ github.event.inputs.environment }}"
+        fi
+        
+        echo "target-env=$TARGET_ENV" >> $GITHUB_OUTPUT
+        
+        # Check if we should proceed with deployment
+        SHOULD_DEPLOY="true"
+        
+        # Production releases must be from main branch
+        if [[ "$TARGET_ENV" == "production" && "${{ github.ref }}" != "refs/heads/main" && "${{ github.event_name }}" == "release" ]]; then
+          if [[ "${{ github.event.release.target_commitish }}" != "main" ]]; then
+            echo "Production releases must target main branch"
+            SHOULD_DEPLOY="false"
+          fi
+        fi
+        
+        # Check if required secrets exist for target environment
+        if [[ "$TARGET_ENV" == "production" ]]; then
+          if [[ -z "${{ secrets.PROD_POSTGRES_PASSWORD }}" ]]; then
+            echo "Missing production database password"
+            SHOULD_DEPLOY="false"
+          fi
+          if [[ -z "${{ secrets.PROD_AIRFLOW_PASSWORD }}" ]]; then
+            echo "Missing production Airflow password"  
+            SHOULD_DEPLOY="false"
+          fi
+        elif [[ "$TARGET_ENV" == "staging" ]]; then
+          if [[ -z "${{ secrets.STAGING_POSTGRES_PASSWORD }}" ]]; then
+            echo "Missing staging database password"
+            SHOULD_DEPLOY="false"
+          fi
+        fi
+        
+        echo "should-deploy=$SHOULD_DEPLOY" >> $GITHUB_OUTPUT
+        
+        if [[ "$SHOULD_DEPLOY" == "false" ]]; then
+          echo "Deployment validation failed"
+          exit 1
+        fi
+        
+        echo "Deployment validation passed for environment: $TARGET_ENV"
+
+  # ==============================================================================
+  # BUILD PRODUCTION IMAGE
+  # ==============================================================================
+  build-production-image:
+    name: Build Production Image
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-checks]
+    timeout-minutes: 30
+    
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Login to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Extract Metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=semver,pattern={{version}}
+          type=raw,value=${{ needs.pre-deployment-checks.outputs.target-env }}-{{sha}}
+        labels: |
+          org.opencontainers.image.title=MetaLayer Production
+          org.opencontainers.image.description=Production MetaLayer data pipeline
+          
+    - name: Build and Push Production Image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        target: production
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          BUILDKIT_INLINE_CACHE=1
+          BUILD_ENV=production
+
+  # ==============================================================================
+  # DEPLOY TO ENVIRONMENT
+  # ==============================================================================
+  deploy:
+    name: Deploy to Environment
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-checks, build-production-image]
+    environment: ${{ needs.pre-deployment-checks.outputs.target-env }}
+    timeout-minutes: 45
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Environment Variables
+      run: |
+        ENV_NAME="${{ needs.pre-deployment-checks.outputs.target-env }}"
+        echo "ENVIRONMENT=$ENV_NAME" >> $GITHUB_ENV
+        echo "IMAGE_TAG=${{ needs.build-production-image.outputs.image-tag }}" >> $GITHUB_ENV
+        
+        # Set environment-specific variables
+        if [[ "$ENV_NAME" == "production" ]]; then
+          echo "POSTGRES_PASSWORD=${{ secrets.PROD_POSTGRES_PASSWORD }}" >> $GITHUB_ENV
+          echo "AIRFLOW_ADMIN_PASSWORD=${{ secrets.PROD_AIRFLOW_PASSWORD }}" >> $GITHUB_ENV
+          echo "GRAFANA_ADMIN_PASSWORD=${{ secrets.PROD_GRAFANA_PASSWORD }}" >> $GITHUB_ENV
+          echo "COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml" >> $GITHUB_ENV
+        else
+          echo "POSTGRES_PASSWORD=${{ secrets.STAGING_POSTGRES_PASSWORD }}" >> $GITHUB_ENV
+          echo "AIRFLOW_ADMIN_PASSWORD=${{ secrets.STAGING_AIRFLOW_PASSWORD }}" >> $GITHUB_ENV
+          echo "GRAFANA_ADMIN_PASSWORD=${{ secrets.STAGING_GRAFANA_PASSWORD }}" >> $GITHUB_ENV
+          echo "COMPOSE_FILE=docker-compose.yml:docker-compose.staging.yml" >> $GITHUB_ENV
+        fi
+        
+    - name: Create Environment Configuration
+      run: |
+        echo "Creating environment-specific configuration..."
+        
+        # Create environment-specific docker-compose override
+        cat > docker-compose.${{ env.ENVIRONMENT }}.yml << EOF
+        version: '3.8'
+        
+        services:
+          postgres:
+            environment:
+              POSTGRES_PASSWORD: \${POSTGRES_PASSWORD}
+          
+          webserver:
+            image: ${{ needs.build-production-image.outputs.image-tag }}
+            environment:
+              _AIRFLOW_WWW_USER_PASSWORD: \${AIRFLOW_ADMIN_PASSWORD}
+          
+          scheduler:
+            image: ${{ needs.build-production-image.outputs.image-tag }}
+          
+          triggerer:
+            image: ${{ needs.build-production-image.outputs.image-tag }}
+            
+          grafana:
+            environment:
+              GF_SECURITY_ADMIN_PASSWORD: \${GRAFANA_ADMIN_PASSWORD}
+        EOF
+        
+    - name: Pre-deployment Backup
+      if: env.ENVIRONMENT == 'production'
+      run: |
+        echo "Creating pre-deployment backup..."
+        
+        # Check if services are running and create backups
+        if docker compose ps postgres 2>/dev/null | grep -q "Up"; then
+          echo "Backing up PostgreSQL database..."
+          docker compose exec -T postgres pg_dump -U postgres airflow > backup_$(date +%Y%m%d_%H%M%S).sql
+        fi
+        
+        if docker compose ps grafana 2>/dev/null | grep -q "Up"; then
+          echo "Backing up Grafana data..."
+          docker compose exec -T grafana tar -czf - /var/lib/grafana > grafana_backup_$(date +%Y%m%d_%H%M%S).tar.gz
+        fi
+        
+    - name: Deploy Services
+      run: |
+        echo "Deploying MetaLayer to ${{ env.ENVIRONMENT }} environment..."
+        
+        # Pull latest images
+        docker compose -f docker-compose.yml -f docker-compose.${{ env.ENVIRONMENT }}.yml pull
+        
+        # Deploy with zero-downtime strategy
+        docker compose -f docker-compose.yml -f docker-compose.${{ env.ENVIRONMENT }}.yml up -d --remove-orphans
+        
+        echo "Waiting for services to start..."
+        sleep 30
+        
+    - name: Health Check Verification
+      run: |
+        echo "Verifying service health..."
+        
+        # Define services and their health check endpoints
+        declare -A services=(
+          ["webserver"]="http://localhost:8080/health"
+          ["postgres"]="pg_isready"
+          ["prometheus"]="http://localhost:9090/-/healthy"
+          ["grafana"]="http://localhost:3000/api/health"
+        )
+        
+        # Wait for services to be healthy (max 10 minutes)
+        timeout=600
+        start_time=$(date +%s)
+        
+        while true; do
+          all_healthy=true
+          current_time=$(date +%s)
+          
+          if (( current_time - start_time > timeout )); then
+            echo "Health check timeout exceeded"
+            exit 1
+          fi
+          
+          for service in "${!services[@]}"; do
+            endpoint="${services[$service]}"
+            
+            if [[ "$service" == "postgres" ]]; then
+              if ! docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
+                all_healthy=false
+                break
+              fi
+            else
+              if ! curl -f -s "$endpoint" >/dev/null 2>&1; then
+                all_healthy=false
+                break
+              fi
+            fi
+          done
+          
+          if $all_healthy; then
+            echo "All services are healthy!"
+            break
+          fi
+          
+          echo "Waiting for services to become healthy..."
+          sleep 15
+        done
+        
+    - name: Post-deployment Verification
+      run: |
+        echo "Running post-deployment verification..."
+        
+        # Verify DAG loading
+        echo "Checking DAG loading..."
+        sleep 60  # Give time for DAGs to load
+        
+        dag_count=$(docker compose exec -T webserver airflow dags list | wc -l)
+        if [[ $dag_count -lt 5 ]]; then
+          echo "Warning: Expected more DAGs to be loaded"
+        fi
+        
+        # Test database connectivity
+        echo "Testing database connectivity..."
+        docker compose exec -T webserver python -c "
+        from airflow import settings
+        session = settings.Session()
+        result = session.execute('SELECT 1').fetchone()
+        print(f'Database test: {result}')
+        session.close()
+        "
+        
+        # Check Prometheus metrics
+        echo "Verifying Prometheus metrics..."
+        if curl -f -s "http://localhost:9090/api/v1/query?query=up" | grep -q '"status":"success"'; then
+          echo "Prometheus metrics are accessible"
+        else
+          echo "Warning: Prometheus metrics may not be working correctly"
+        fi
+        
+        echo "Post-deployment verification completed!"
+
+  # ==============================================================================
+  # POST-DEPLOYMENT TASKS
+  # ==============================================================================
+  post-deployment:
+    name: Post-deployment Tasks
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-checks, deploy]
+    timeout-minutes: 15
+    
+    steps:
+    - name: Update Deployment Status
+      run: |
+        echo "Deployment completed successfully!"
+        echo "Environment: ${{ needs.pre-deployment-checks.outputs.target-env }}"
+        echo "Image: ${{ needs.build-production-image.outputs.image-tag }}"
+        echo "Commit: ${{ github.sha }}"
+        echo "Deployed by: ${{ github.actor }}"
+        echo "Deployment time: $(date)"
+        
+    - name: Cleanup Old Images
+      run: |
+        echo "Cleaning up old Docker images..."
+        
+        # Keep last 3 versions for rollback capability
+        docker image ls --format "table {{.Repository}}:{{.Tag}}" | \
+        grep "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" | \
+        tail -n +4 | \
+        xargs -r docker image rm -f || true
+        
+    - name: Send Deployment Notification
+      run: |
+        echo "📢 Deployment Notification"
+        echo "=========================="
+        echo "✅ MetaLayer successfully deployed to ${{ needs.pre-deployment-checks.outputs.target-env }}"
+        echo "🏷️  Version: ${{ github.ref_name }}"
+        echo "📝 Commit: ${{ github.sha }}"
+        echo "👤 Deployed by: ${{ github.actor }}"
+        echo "🕐 Time: $(date)"
+        echo ""
+        echo "🔗 Services:"
+        echo "   - Airflow: http://localhost:8080"
+        echo "   - Grafana: http://localhost:3000"
+        echo "   - Prometheus: http://localhost:9090"
+        echo ""
+        echo "Next steps:"
+        echo "1. Monitor service health and metrics"
+        echo "2. Verify DAG execution"
+        echo "3. Check data quality reports"

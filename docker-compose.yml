@@ -1,0 +1,182 @@
+x-airflow-common:
+  &airflow-common
+  image: quay.io/astronomer/astro-runtime:12.1.0-base
+  environment:
+    &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB:-airflow}
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
+    AIRFLOW__CORE__PARALLELISM: 64
+    AIRFLOW__CORE__DAG_CONCURRENCY: 32
+    AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: 8
+    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
+  deploy:
+    resources:
+      limits:
+        cpus: '2.0'
+        memory: 4G
+      reservations:
+        cpus: '1.0'
+        memory: 2G
+  volumes:
+    - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
+    - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
+    - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
+    - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
+    - ${AIRFLOW_PROJ_DIR:-.}/include:/opt/airflow/include
+    - ${AIRFLOW_PROJ_DIR:-.}/data:/opt/airflow/data
+  user: "${AIRFLOW_UID:-50000}:0"
+  networks:
+    - metalayer_network
+  depends_on:
+    &airflow-common-depends-on
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-airflow}
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+    networks:
+      - metalayer_network
+
+  webserver:
+    <<: *airflow-common
+    command: airflow webserver
+    ports:
+      - "8081:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      init:
+        condition: service_completed_successfully
+
+  scheduler:
+    <<: *airflow-common
+    command: airflow scheduler
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}" || exit 1']
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      init:
+        condition: service_completed_successfully
+
+  triggerer:
+    <<: *airflow-common
+    command: airflow triggerer
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}" || exit 1']
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      init:
+        condition: service_completed_successfully
+
+  init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        set -e
+        echo "🚀 Starting MetaLayer Airflow Initialization..."
+        
+        # Create necessary directories
+        echo "📁 Creating directories..."
+        mkdir -p /sources/logs /sources/dags /sources/plugins /sources/config
+        chown -R "${AIRFLOW_UID:-50000}:0" /sources/{logs,dags,plugins,config} || true
+        
+        # Wait for PostgreSQL to be ready
+        echo "⏳ Waiting for PostgreSQL to be ready..."
+        for attempt in {1..30}; do
+          if pg_isready -h postgres -p 5432 -U postgres; then
+            echo "✅ PostgreSQL is ready!"
+            break
+          fi
+          echo "Waiting for PostgreSQL... attempt $${attempt}/30"
+          sleep 2
+        done
+        
+        # Initialize Airflow database
+        echo "🔧 Initializing Airflow database..."
+        airflow db migrate
+        
+        # Create admin user
+        echo "👤 Creating Airflow admin user..."
+        airflow users create \
+          --username admin \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@metalayer.com \
+          --password admin || echo "Admin user already exists"
+        
+        echo "🎉 MetaLayer Airflow initialization completed successfully!"
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_MIGRATE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-admin}
+      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-admin}
+      _PIP_ADDITIONAL_REQUIREMENTS: ''
+    user: "0:0"
+    volumes:
+      - ${AIRFLOW_PROJ_DIR:-.}:/sources
+
+  cli:
+    <<: *airflow-common
+    profiles:
+      - debug
+    environment:
+      <<: *airflow-common-env
+      CONNECTION_CHECK_MAX_COUNT: "0"
+    command:
+      - bash
+      - -c
+      - airflow
+
+volumes:
+  postgres-db-volume:
+
+networks:
+  metalayer_network:
+    driver: bridge

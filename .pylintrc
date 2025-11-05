@@ -1,0 +1,28 @@
+# ===========================================
+# GITHUB ACTIONS CONFIGURATION
+# ===========================================
+
+# Pylint Configuration for Code Quality
+[MASTER]
+load-plugins=pylint.extensions.docparams
+
+[FORMAT]
+max-line-length=88
+
+[MESSAGES CONTROL]
+disable=
+    missing-docstring,
+    too-few-public-methods,
+    too-many-arguments,
+    too-many-locals,
+    too-many-branches,
+    too-many-statements,
+    duplicate-code,
+    import-error
+
+[DESIGN]
+max-args=10
+max-locals=20
+max-returns=6
+max-branches=15
+max-statements=50

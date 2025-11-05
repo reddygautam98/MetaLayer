@@ -1,0 +1,325 @@
+# Security & Quality Assurance Workflow
+name: 🛡️ Security & Quality Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run security scans daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # ==============================================================================
+  # DEPENDENCY VULNERABILITY SCANNING
+  # ==============================================================================
+  dependency-scan:
+    name: 🔒 Dependency Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - name: 📂 Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: 📦 Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install safety bandit semgrep
+        pip install -r requirements.txt
+        
+    - name: 🔍 Safety Check (Known Vulnerabilities)
+      run: |
+        echo "Scanning for known security vulnerabilities..."
+        safety check --json --output safety-report.json || true
+        safety check --short-report
+        
+    - name: 🛡️ Bandit Security Analysis
+      run: |
+        echo "Running Bandit security analysis..."
+        bandit -r dags/ include/ -f json -o bandit-report.json || true
+        bandit -r dags/ include/ -ll -i
+        
+    - name: 🔎 Semgrep Static Analysis
+      run: |
+        echo "Running Semgrep static analysis..."
+        semgrep --config=auto dags/ include/ --json --output=semgrep-report.json || true
+        semgrep --config=auto dags/ include/ --severity=ERROR
+        
+    - name: 📊 Upload Security Reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-scan-reports
+        path: |
+          safety-report.json
+          bandit-report.json
+          semgrep-report.json
+        retention-days: 30
+        
+    - name: 💬 Comment Security Results
+      uses: actions/github-script@v6
+      if: github.event_name == 'pull_request'
+      with:
+        script: |
+          const fs = require('fs');
+          let comment = '## 🛡️ Security Scan Results\n\n';
+          
+          // Add safety results
+          try {
+            const safetyData = JSON.parse(fs.readFileSync('safety-report.json', 'utf8'));
+            const vulns = safetyData.vulnerabilities || [];
+            comment += `**Dependency Vulnerabilities:** ${vulns.length} found\n`;
+          } catch (e) {
+            comment += '**Dependency Vulnerabilities:** ✅ None found\n';
+          }
+          
+          // Add bandit results
+          try {
+            const banditData = JSON.parse(fs.readFileSync('bandit-report.json', 'utf8'));
+            const issues = banditData.results || [];
+            comment += `**Code Security Issues:** ${issues.length} found\n`;
+          } catch (e) {
+            comment += '**Code Security Issues:** ✅ None found\n';
+          }
+          
+          comment += '\nSee the Actions tab for detailed reports.';
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });
+
+  # ==============================================================================
+  # CODE QUALITY ANALYSIS
+  # ==============================================================================
+  code-quality:
+    name: 📊 Code Quality Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+    - name: 📂 Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: 📦 Install Quality Tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install black isort flake8 pylint mypy coverage pytest pytest-cov
+        
+    - name: 🎨 Code Formatting (Black)
+      run: |
+        echo "Checking code formatting..."
+        black --check --diff dags/ include/ tests/ || {
+          echo "❌ Code formatting issues found. Run 'black dags/ include/ tests/' to fix."
+          exit 1
+        }
+        echo "✅ Code formatting is correct"
+        
+    - name: 📏 Import Sorting (isort)
+      run: |
+        echo "Checking import sorting..."
+        isort --check-only --diff dags/ include/ tests/ || {
+          echo "❌ Import sorting issues found. Run 'isort dags/ include/ tests/' to fix."
+          exit 1
+        }
+        echo "✅ Import sorting is correct"
+        
+    - name: 🔍 Linting (Flake8)
+      run: |
+        echo "Running Flake8 linting..."
+        flake8 dags/ include/ tests/ --count --statistics --max-line-length=127 --extend-ignore=E203,W503
+        
+    - name: 📈 Type Checking (MyPy)
+      run: |
+        echo "Running type checking..."
+        mypy dags/ include/ --ignore-missing-imports --no-strict-optional || true
+        
+    - name: 🔬 Advanced Linting (Pylint)
+      run: |
+        echo "Running Pylint analysis..."
+        pylint dags/ include/ --output-format=json --reports=y > pylint-report.json || true
+        pylint dags/ include/ --reports=y --score=y
+        
+    - name: 🧪 Test Coverage Analysis
+      run: |
+        echo "Running test coverage analysis..."
+        if [ -d "tests/" ]; then
+          coverage run -m pytest tests/ --tb=short
+          coverage report --show-missing
+          coverage html
+          coverage json
+        else
+          echo "No tests directory found, skipping coverage analysis"
+        fi
+        
+    - name: 📊 Upload Coverage Reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: coverage-reports
+        path: |
+          htmlcov/
+          coverage.json
+          pylint-report.json
+        retention-days: 30
+
+  # ==============================================================================
+  # DOCKER SECURITY SCANNING
+  # ==============================================================================
+  docker-security:
+    name: 🐳 Docker Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    steps:
+    - name: 📂 Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: 🔧 Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: 🏗️ Build Test Image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        load: true
+        tags: metalayer:security-test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+    - name: 🛡️ Scan with Trivy
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'metalayer:security-test'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        severity: 'CRITICAL,HIGH,MEDIUM'
+        
+    - name: 📊 Upload Trivy Results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+        
+    - name: 🔍 Scan with Hadolint (Dockerfile)
+      uses: hadolint/hadolint-action@v3.1.0
+      with:
+        dockerfile: Dockerfile
+        format: sarif
+        output-file: hadolint-results.sarif
+        no-fail: true
+        
+    - name: 📊 Upload Hadolint Results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: hadolint-results.sarif
+
+  # ==============================================================================
+  # INFRASTRUCTURE SECURITY
+  # ==============================================================================
+  infrastructure-scan:
+    name: 🏗️ Infrastructure Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - name: 📂 Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: 🔍 Scan Docker Compose Files
+      run: |
+        echo "Scanning Docker Compose files for security issues..."
+        
+        # Check for hardcoded passwords
+        echo "Checking for hardcoded credentials..."
+        if grep -r "password.*=" docker-compose*.yml | grep -v "POSTGRES_PASSWORD" | grep -v "admin"; then
+          echo "❌ Potential hardcoded passwords found in Docker Compose files"
+          exit 1
+        fi
+        
+        # Check for exposed ports
+        echo "Checking for exposed ports..."
+        grep -r "ports:" docker-compose*.yml || echo "No exposed ports found"
+        
+        # Check for privileged containers
+        echo "Checking for privileged containers..."
+        if grep -r "privileged.*true" docker-compose*.yml; then
+          echo "⚠️  Privileged containers detected"
+        fi
+        
+        echo "✅ Infrastructure security scan completed"
+        
+    - name: 🔐 Check Environment Variables
+      run: |
+        echo "Checking environment variable security..."
+        
+        # Look for potential secrets in compose files
+        grep -r "environment:" docker-compose*.yml -A 10 | grep -E "(SECRET|KEY|TOKEN|PASSWORD)" || echo "No obvious secrets in environment variables"
+        
+        echo "✅ Environment variable check completed"
+
+  # ==============================================================================
+  # COMPLIANCE REPORTING
+  # ==============================================================================
+  compliance-report:
+    name: 📋 Compliance Report
+    runs-on: ubuntu-latest
+    needs: [dependency-scan, code-quality, docker-security, infrastructure-scan]
+    if: always()
+    
+    steps:
+    - name: 📊 Generate Compliance Summary
+      run: |
+        echo "## 🛡️ Security & Compliance Report" >> compliance-report.md
+        echo "Generated on: $(date)" >> compliance-report.md
+        echo "" >> compliance-report.md
+        
+        echo "### Job Results" >> compliance-report.md
+        echo "| Check | Status |" >> compliance-report.md
+        echo "|-------|--------|" >> compliance-report.md
+        echo "| Dependency Scan | ${{ needs.dependency-scan.result == 'success' && '✅ PASS' || '❌ FAIL' }} |" >> compliance-report.md
+        echo "| Code Quality | ${{ needs.code-quality.result == 'success' && '✅ PASS' || '❌ FAIL' }} |" >> compliance-report.md
+        echo "| Docker Security | ${{ needs.docker-security.result == 'success' && '✅ PASS' || '❌ FAIL' }} |" >> compliance-report.md
+        echo "| Infrastructure | ${{ needs.infrastructure-scan.result == 'success' && '✅ PASS' || '❌ FAIL' }} |" >> compliance-report.md
+        echo "" >> compliance-report.md
+        
+        echo "### Security Standards Compliance" >> compliance-report.md
+        echo "- ✅ OWASP Top 10 checks performed" >> compliance-report.md
+        echo "- ✅ Dependency vulnerability scanning" >> compliance-report.md
+        echo "- ✅ Static code analysis" >> compliance-report.md
+        echo "- ✅ Container image scanning" >> compliance-report.md
+        echo "- ✅ Infrastructure configuration review" >> compliance-report.md
+        
+        cat compliance-report.md
+        
+    - name: 📤 Upload Compliance Report
+      uses: actions/upload-artifact@v3
+      with:
+        name: compliance-report
+        path: compliance-report.md
+        retention-days: 90

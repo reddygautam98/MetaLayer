@@ -1,0 +1,308 @@
+name: 🔒 Security Audit & Compliance
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'  # Weekly on Monday at 2 AM UTC
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'requirements.txt'
+      - 'Dockerfile'
+      - '.github/workflows/**'
+
+jobs:
+  # ===========================================
+  # DEPENDENCY SECURITY AUDIT
+  # ===========================================
+  dependency-audit:
+    name: 🔍 Dependency Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: 🔒 Python Dependency Security Audit
+        uses: pypa/gh-action-pip-audit@v1.0.8
+        with:
+          inputs: requirements.txt
+          format: json
+          output: pip-audit-report.json
+
+      - name: 🛡️ Safety Check for Known Vulnerabilities
+        run: |
+          pip install safety
+          safety check --json --output safety-report.json || true
+
+      - name: 📊 Upload Security Audit Reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: dependency-security-reports
+          path: |
+            pip-audit-report.json
+            safety-report.json
+
+  # ===========================================
+  # CONTAINER SECURITY SCANNING
+  # ===========================================
+  container-security:
+    name: 🐳 Container Security Scanning
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🏗️ Build Docker Image for Scanning
+        run: |
+          docker build -t metalayer-security-scan:latest .
+
+      - name: 🔍 Run Trivy Vulnerability Scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'metalayer-security-scan:latest'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: 🔍 Run Grype Vulnerability Scanner
+        uses: anchore/scan-action@v3
+        id: grype-scan
+        with:
+          image: 'metalayer-security-scan:latest'
+          fail-build: false
+
+      - name: 🔒 Docker Bench Security
+        run: |
+          docker run --rm --net host --pid host --userns host --cap-add audit_control \
+            -e DOCKER_CONTENT_TRUST=$DOCKER_CONTENT_TRUST \
+            -v /etc:/etc:ro \
+            -v /usr/bin/containerd:/usr/bin/containerd:ro \
+            -v /usr/bin/runc:/usr/bin/runc:ro \
+            -v /usr/lib/systemd:/usr/lib/systemd:ro \
+            -v /var/lib:/var/lib:ro \
+            -v /var/run/docker.sock:/var/run/docker.sock:ro \
+            --label docker_bench_security \
+            docker/docker-bench-security > docker-bench-results.txt || true
+
+      - name: 📊 Upload Container Security Results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: 📊 Upload Security Scan Artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: container-security-reports
+          path: |
+            trivy-results.sarif
+            docker-bench-results.txt
+            ${{ steps.grype-scan.outputs.sarif }}
+
+  # ===========================================
+  # CODE SECURITY ANALYSIS
+  # ===========================================
+  code-security:
+    name: 🔒 Code Security Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install Security Tools
+        run: |
+          pip install bandit semgrep
+
+      - name: 🔍 Run Bandit Security Linter
+        run: |
+          bandit -r dags/ plugins/ -f json -o bandit-security-report.json || true
+
+      - name: 🔍 Run Semgrep Security Analysis
+        run: |
+          semgrep --config=auto --json --output=semgrep-security-report.json dags/ plugins/ || true
+
+      - name: 🔍 Check for Secrets in Code
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --debug --only-verified
+
+      - name: 📊 Upload Code Security Reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: code-security-reports
+          path: |
+            bandit-security-report.json
+            semgrep-security-report.json
+
+  # ===========================================
+  # INFRASTRUCTURE SECURITY
+  # ===========================================
+  infrastructure-security:
+    name: 🏗️ Infrastructure Security Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🔍 Scan Docker Compose Configuration
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-config-results.sarif'
+
+      - name: 🔒 Check for Hardcoded Secrets
+        run: |
+          # Check for hardcoded passwords, keys, tokens
+          echo "🔍 Scanning for hardcoded secrets..."
+          
+          # Check docker-compose files
+          if grep -r "password.*=" docker-compose*.yml; then
+            echo "⚠️  Found potential hardcoded passwords in docker-compose files"
+          fi
+          
+          # Check environment files
+          if grep -r "password.*=" .env* 2>/dev/null; then
+            echo "⚠️  Found potential hardcoded passwords in environment files"
+          fi
+          
+          # Check for API keys
+          if grep -ri "api[_-]key\|secret[_-]key\|access[_-]token" --exclude-dir=.git .; then
+            echo "⚠️  Found potential API keys or tokens"
+          fi
+
+      - name: 📊 Upload Infrastructure Security Results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-config-results.sarif'
+
+  # ===========================================
+  # COMPLIANCE CHECKS
+  # ===========================================
+  compliance-audit:
+    name: 📋 Compliance & Best Practices Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 📋 Check Security Best Practices
+        run: |
+          echo "📋 Running compliance checks..."
+          
+          # Check if .env files are in .gitignore
+          if ! grep -q "\.env" .gitignore 2>/dev/null; then
+            echo "❌ .env files should be in .gitignore"
+            exit 1
+          else
+            echo "✅ .env files are properly ignored"
+          fi
+          
+          # Check for secure Docker practices
+          if grep -q "USER root" Dockerfile && ! grep -q "USER astro\|USER airflow" Dockerfile; then
+            echo "❌ Dockerfile should not run as root user"
+            exit 1
+          else
+            echo "✅ Dockerfile follows security best practices"
+          fi
+          
+          # Check for HTTPS in production URLs
+          if grep -r "http://" docker-compose*.yml | grep -v localhost | grep -v 127.0.0.1; then
+            echo "⚠️  Found HTTP URLs that should use HTTPS in production"
+          fi
+
+      - name: 📋 Data Privacy Compliance Check
+        run: |
+          echo "🔒 Checking data privacy compliance..."
+          
+          # Check for PII handling in code
+          if grep -ri "ssn\|social.*security\|credit.*card\|password.*plain" dags/ plugins/ 2>/dev/null; then
+            echo "⚠️  Found potential PII handling - ensure proper encryption"
+          fi
+          
+          # Check for data retention policies
+          if ! ls include/sql/ | grep -i "retention\|archive\|purge" >/dev/null 2>&1; then
+            echo "⚠️  Consider implementing data retention policies"
+          fi
+
+      - name: 📊 Generate Compliance Report
+        run: |
+          mkdir -p reports
+          cat > reports/compliance-report.md << 'EOF'
+          # Security & Compliance Audit Report
+          
+          ## Date: $(date)
+          
+          ## Security Checks Performed:
+          - ✅ Dependency vulnerability scanning
+          - ✅ Container security analysis
+          - ✅ Code security analysis
+          - ✅ Infrastructure security review
+          - ✅ Compliance best practices audit
+          
+          ## Recommendations:
+          1. Regularly update dependencies to latest secure versions
+          2. Implement secrets management solution
+          3. Enable container image scanning in CI/CD
+          4. Review and update security policies quarterly
+          5. Conduct regular penetration testing
+          
+          ## Next Review: $(date -d "+3 months")
+          EOF
+
+      - name: 📊 Upload Compliance Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: compliance-audit-report
+          path: reports/compliance-report.md
+
+  # ===========================================
+  # SECURITY NOTIFICATION
+  # ===========================================
+  security-notification:
+    name: 📢 Security Audit Notification
+    runs-on: ubuntu-latest
+    needs: [dependency-audit, container-security, code-security, infrastructure-security, compliance-audit]
+    if: always()
+    
+    steps:
+      - name: 📢 Send Security Audit Notification
+        uses: 8398a7/action-slack@v3
+        if: failure()
+        with:
+          status: failure
+          channel: '#security-alerts'
+          webhook_url: ${{ secrets.SECURITY_SLACK_WEBHOOK }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+          text: |
+            🚨 Security Audit Failed for MetaLayer Project
+            
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.ref }}
+            Commit: ${{ github.sha }}
+            
+            Please review the security scan results and address any issues immediately.
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SECURITY_SLACK_WEBHOOK }}

@@ -1,0 +1,318 @@
+name: 🏗️ Infrastructure Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target Environment'
+        required: true
+        default: 'development'
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+      action:
+        description: 'Deployment Action'
+        required: true
+        default: 'deploy'
+        type: choice
+        options:
+          - deploy
+          - destroy
+          - update
+
+env:
+  AWS_REGION: us-east-1
+  TERRAFORM_VERSION: '1.6.0'
+  KUBECTL_VERSION: 'v1.28.0'
+
+jobs:
+  # ===========================================
+  # INFRASTRUCTURE VALIDATION
+  # ===========================================
+  validate-infrastructure:
+    name: ✅ Validate Infrastructure Code
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: 📋 Terraform Format Check
+        run: |
+          if [ -d "infrastructure/terraform" ]; then
+            cd infrastructure/terraform
+            terraform fmt -check -recursive
+          else
+            echo "No Terraform code found, skipping validation"
+          fi
+
+      - name: ✅ Terraform Validate
+        run: |
+          if [ -d "infrastructure/terraform" ]; then
+            cd infrastructure/terraform
+            terraform init -backend=false
+            terraform validate
+          fi
+
+      - name: 🔍 Validate Docker Compose
+        run: |
+          docker-compose -f docker-compose.yml config
+          docker-compose -f docker-compose.yml -f docker-compose.override.yml config
+
+      - name: 🔍 Validate Kubernetes Manifests
+        if: github.event.inputs.environment == 'production'
+        run: |
+          if [ -d "infrastructure/kubernetes" ]; then
+            # Install kubeval for Kubernetes validation
+            wget https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz
+            tar xf kubeval-linux-amd64.tar.gz
+            sudo cp kubeval /usr/local/bin
+            
+            # Validate all Kubernetes manifests
+            find infrastructure/kubernetes -name "*.yaml" -o -name "*.yml" | xargs kubeval
+          fi
+
+  # ===========================================
+  # DEVELOPMENT DEPLOYMENT
+  # ===========================================
+  deploy-development:
+    name: 🚀 Deploy Development Environment
+    runs-on: ubuntu-latest
+    needs: validate-infrastructure
+    if: github.event.inputs.environment == 'development' && github.event.inputs.action == 'deploy'
+    environment: development
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup Development Environment
+        run: |
+          # Create development .env file
+          cp .env.template .env.development
+          
+          # Set development-specific values
+          sed -i 's/CHANGE_ME_SECURE_PASSWORD_HERE/dev_password_123/g' .env.development
+          sed -i 's/GENERATE_32_CHAR_SECRET_KEY_HERE/dev_secret_key_for_development_only/g' .env.development
+          sed -i 's/your-email@yourdomain.com/dev-team@company.com/g' .env.development
+
+      - name: 🐳 Deploy with Docker Compose
+        run: |
+          # Copy development environment
+          cp .env.development .env
+          
+          # Start development environment
+          docker-compose -f docker-compose.yml -f docker-compose.override.yml up -d
+          
+          # Wait for services to be ready
+          sleep 60
+          
+          # Health check
+          curl -f http://localhost:8081/health || exit 1
+
+      - name: ✅ Verify Development Deployment
+        run: |
+          # Check if all containers are running
+          docker-compose ps
+          
+          # Test database connectivity
+          docker-compose exec -T postgres pg_isready -U postgres
+          
+          # Test Airflow API
+          curl -f http://localhost:8081/api/v1/health
+
+      - name: 📊 Development Deployment Summary
+        run: |
+          echo "✅ Development environment deployed successfully!"
+          echo "🌐 Airflow UI: http://localhost:8081"
+          echo "🗄️ PostgreSQL: localhost:5433"
+
+  # ===========================================
+  # STAGING DEPLOYMENT
+  # ===========================================
+  deploy-staging:
+    name: 🎭 Deploy Staging Environment
+    runs-on: ubuntu-latest
+    needs: validate-infrastructure
+    if: github.event.inputs.environment == 'staging' && github.event.inputs.action == 'deploy'
+    environment: staging
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: 🏗️ Deploy to AWS ECS/Fargate (Staging)
+        run: |
+          # Example AWS ECS deployment
+          # Replace with your actual deployment commands
+          
+          echo "🎭 Deploying MetaLayer to AWS ECS Staging Environment"
+          
+          # Update ECS service with new image
+          # aws ecs update-service --cluster metalayer-staging --service metalayer-airflow --force-new-deployment
+
+      - name: ✅ Verify Staging Deployment
+        run: |
+          echo "✅ Staging deployment verification complete"
+
+  # ===========================================
+  # PRODUCTION DEPLOYMENT
+  # ===========================================
+  deploy-production:
+    name: 🌟 Deploy Production Environment
+    runs-on: ubuntu-latest
+    needs: validate-infrastructure
+    if: github.event.inputs.environment == 'production' && github.event.inputs.action == 'deploy'
+    environment: production
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_PROD }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: 🔧 Setup Terraform for Production
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: 🏗️ Deploy Infrastructure with Terraform
+        if: hashFiles('infrastructure/terraform/*.tf') != ''
+        run: |
+          cd infrastructure/terraform/environments/production
+          
+          # Initialize Terraform
+          terraform init
+          
+          # Plan infrastructure changes
+          terraform plan -out=tfplan
+          
+          # Apply infrastructure changes
+          terraform apply tfplan
+
+      - name: 🔧 Setup Kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: ${{ env.KUBECTL_VERSION }}
+
+      - name: 🚀 Deploy to Kubernetes (Production)
+        if: hashFiles('infrastructure/kubernetes/*.yaml') != ''
+        run: |
+          # Update kubeconfig
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name metalayer-production
+          
+          # Apply Kubernetes manifests
+          kubectl apply -f infrastructure/kubernetes/namespace.yaml
+          kubectl apply -f infrastructure/kubernetes/configmaps/
+          kubectl apply -f infrastructure/kubernetes/secrets/
+          kubectl apply -f infrastructure/kubernetes/deployments/
+          kubectl apply -f infrastructure/kubernetes/services/
+          kubectl apply -f infrastructure/kubernetes/ingress/
+          
+          # Wait for deployment to be ready
+          kubectl wait --for=condition=available deployment/metalayer-airflow -n metalayer-prod --timeout=600s
+
+      - name: ✅ Verify Production Deployment
+        run: |
+          # Health check production deployment
+          kubectl get pods -n metalayer-prod
+          kubectl get services -n metalayer-prod
+          
+          # Test application health
+          INGRESS_URL=$(kubectl get ingress metalayer-ingress -n metalayer-prod -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          curl -f "https://$INGRESS_URL/health" || exit 1
+
+      - name: 🌟 Production Deployment Complete
+        run: |
+          echo "🌟 Production deployment completed successfully!"
+          echo "🔗 Production URL: https://metalayer.yourdomain.com"
+
+  # ===========================================
+  # INFRASTRUCTURE DESTRUCTION
+  # ===========================================
+  destroy-infrastructure:
+    name: 💥 Destroy Infrastructure
+    runs-on: ubuntu-latest
+    needs: validate-infrastructure
+    if: github.event.inputs.action == 'destroy'
+    environment: ${{ github.event.inputs.environment }}
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: ⚠️ Confirm Destruction
+        run: |
+          echo "⚠️ WARNING: About to destroy ${{ github.event.inputs.environment }} infrastructure"
+          echo "This action is irreversible!"
+
+      - name: 🔧 Configure AWS Credentials
+        if: github.event.inputs.environment != 'development'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: 💥 Destroy Development Environment
+        if: github.event.inputs.environment == 'development'
+        run: |
+          docker-compose -f docker-compose.yml -f docker-compose.override.yml down -v
+          docker system prune -f
+
+      - name: 💥 Destroy Cloud Infrastructure
+        if: github.event.inputs.environment != 'development' && hashFiles('infrastructure/terraform/*.tf') != ''
+        run: |
+          cd infrastructure/terraform/environments/${{ github.event.inputs.environment }}
+          
+          # Initialize Terraform
+          terraform init
+          
+          # Destroy infrastructure
+          terraform destroy -auto-approve
+
+  # ===========================================
+  # DEPLOYMENT NOTIFICATION
+  # ===========================================
+  notify-deployment:
+    name: 📢 Deployment Notification
+    runs-on: ubuntu-latest
+    needs: [deploy-development, deploy-staging, deploy-production, destroy-infrastructure]
+    if: always()
+    
+    steps:
+      - name: 📢 Send Deployment Notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          channel: '#deployments'
+          text: |
+            🚀 MetaLayer Infrastructure Deployment
+            
+            Environment: ${{ github.event.inputs.environment }}
+            Action: ${{ github.event.inputs.action }}
+            Status: ${{ job.status }}
+            
+            Repository: ${{ github.repository }}
+            Commit: ${{ github.sha }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

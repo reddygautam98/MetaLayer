@@ -1,0 +1,95 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "MetaLayer Data Pipeline Monitoring",
+    "tags": ["metalayer", "data-pipeline", "etl"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Data Quality Scores by Layer",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "metalayer_data_quality_score",
+            "legendFormat": "{{layer}} - {{table}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        },
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 1,
+            "unit": "percentunit"
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Database Connection Pool Status",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "metalayer_db_pool_active_connections",
+            "legendFormat": "Active Connections"
+          },
+          {
+            "expr": "metalayer_db_pool_total_connections",
+            "legendFormat": "Total Pool Size"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "Incremental Processing Duration",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(metalayer_incremental_processing_duration_seconds_sum[5m]) / rate(metalayer_incremental_processing_duration_seconds_count[5m])",
+            "legendFormat": "{{layer}} - {{operation}} - {{table}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "id": 4,
+        "title": "Records Processed Over Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(metalayer_records_processed_total[5m])",
+            "legendFormat": "{{layer}} - {{operation}} - {{table}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 16
+        }
+      }
+    ]
+  }
+}

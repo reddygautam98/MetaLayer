@@ -1,0 +1,205 @@
+# =====================================================
+# ETL PIPELINE - PRODUCTION DOCKER IMAGE
+# Apache Airflow 2.10.2 with Python 3.11
+# =====================================================
+
+ARG AIRFLOW_VERSION=2.10.2
+ARG PYTHON_VERSION="3.11"
+
+FROM apache/airflow:${AIRFLOW_VERSION}-python${PYTHON_VERSION}
+
+# =====================================================
+# METADATA & LABELS
+# =====================================================
+LABEL maintainer="ETL Pipeline Team"
+LABEL version="1.0.0"
+LABEL description="Production ETL Pipeline with Airflow, PostgreSQL, and Monitoring"
+LABEL org.opencontainers.image.title="ETL Pipeline Airflow"
+LABEL org.opencontainers.image.description="End-to-end ETL pipeline using Apache Airflow"
+LABEL org.opencontainers.image.version="1.0.0"
+
+# =====================================================
+# ENVIRONMENT VARIABLES
+# =====================================================
+ENV AIRFLOW_HOME=/opt/airflow
+ENV PYTHONPATH="${PYTHONPATH}:${AIRFLOW_HOME}/include"
+ENV PATH="${PATH}:${AIRFLOW_HOME}/bin"
+
+# Performance tuning
+ENV AIRFLOW__CORE__PARALLELISM=32
+ENV AIRFLOW__CORE__DAG_CONCURRENCY=16
+ENV AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG=4
+ENV AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG=16
+
+# Security settings
+ENV AIRFLOW__WEBSERVER__EXPOSE_CONFIG=False
+ENV AIRFLOW__CORE__ENABLE_XCOM_PICKLING=False
+ENV AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX=True
+
+# ETL specific
+ENV ETL_ENVIRONMENT=docker
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# =====================================================
+# SYSTEM DEPENDENCIES
+# =====================================================
+USER root
+
+# Install system packages for ETL processing
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    postgresql-client \
+    unzip \
+    wget \
+    curl \
+    htop \
+    procps \
+    netcat-openbsd \
+    iputils-ping \
+    gcc \
+    g++ \
+    make \
+    && apt-get autoremove -yqq --purge \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# =====================================================
+# PYTHON DEPENDENCIES
+# =====================================================
+USER airflow
+
+# Upgrade pip and install core packages
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Copy requirements and install ETL dependencies
+COPY --chown=airflow:root requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+# Install additional production packages
+RUN pip install --no-cache-dir \
+    statsd==4.0.1 \
+    gevent==23.7.0 \
+    cryptography>=41.0.0 \
+    pyarrow==13.0.0 \
+    fastparquet==2023.8.0
+
+# =====================================================
+# ETL PIPELINE CODE
+# =====================================================
+# Copy DAGs (read-only for security)
+COPY --chown=airflow:root dags/ ${AIRFLOW_HOME}/dags/
+
+# Copy include directory (utilities, SQL, monitoring)
+COPY --chown=airflow:root include/ ${AIRFLOW_HOME}/include/
+
+# Copy plugins
+COPY --chown=airflow:root plugins/ ${AIRFLOW_HOME}/plugins/
+
+# Copy configuration files
+COPY --chown=airflow:root config/ ${AIRFLOW_HOME}/config/
+
+# Copy test data (for development)
+COPY --chown=airflow:root data/ ${AIRFLOW_HOME}/data/
+
+# Copy scripts
+COPY --chown=airflow:root scripts/ ${AIRFLOW_HOME}/scripts/
+
+# Copy test suites
+COPY --chown=airflow:root tests/ ${AIRFLOW_HOME}/tests/
+
+# =====================================================
+# DIRECTORY PERMISSIONS & SETUP
+# =====================================================
+USER root
+
+# Create necessary directories
+RUN mkdir -p ${AIRFLOW_HOME}/logs \
+             ${AIRFLOW_HOME}/plugins \
+             ${AIRFLOW_HOME}/config \
+             ${AIRFLOW_HOME}/data/bronze_src \
+             ${AIRFLOW_HOME}/data/silver_processed \
+             ${AIRFLOW_HOME}/data/gold_analytics \
+             /tmp/airflow
+
+# Set proper ownership and permissions
+RUN chown -R airflow:root ${AIRFLOW_HOME} && \
+    chmod -R 755 ${AIRFLOW_HOME}/dags && \
+    chmod -R 755 ${AIRFLOW_HOME}/include && \
+    chmod -R 755 ${AIRFLOW_HOME}/plugins && \
+    chmod -R 755 ${AIRFLOW_HOME}/scripts && \
+    chmod -R 775 ${AIRFLOW_HOME}/logs && \
+    chmod -R 775 ${AIRFLOW_HOME}/data
+
+# =====================================================
+# HEALTH CHECK SCRIPT
+# =====================================================
+RUN cat > ${AIRFLOW_HOME}/scripts/health_check.py << 'EOF'
+#!/usr/bin/env python3
+"""Health check script for Airflow ETL pipeline."""
+import sys
+import subprocess
+import psutil
+import requests
+from pathlib import Path
+
+def check_airflow_process():
+    """Check if Airflow processes are running."""
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        if 'airflow' in ' '.join(proc.info['cmdline'] or []):
+            return True
+    return False
+
+def check_webserver_health():
+    """Check Airflow webserver health."""
+    try:
+        response = requests.get('http://localhost:8080/health', timeout=5)
+        return response.status_code == 200
+    except:
+        return False
+
+def check_database_connection():
+    """Check database connectivity."""
+    try:
+        result = subprocess.run(
+            ['airflow', 'db', 'check'], 
+            capture_output=True, 
+            timeout=10
+        )
+        return result.returncode == 0
+    except:
+        return False
+
+if __name__ == '__main__':
+    checks = [
+        ('Airflow Process', check_airflow_process),
+        ('Database Connection', check_database_connection)
+    ]
+    
+    for name, check_func in checks:
+        if not check_func():
+            print(f"Health check failed: {name}")
+            sys.exit(1)
+    
+    print("All health checks passed")
+    sys.exit(0)
+EOF
+
+RUN chmod +x ${AIRFLOW_HOME}/scripts/health_check.py
+
+# =====================================================
+# ENTRYPOINT & COMMAND SETUP
+# =====================================================
+USER airflow
+
+# Set working directory
+WORKDIR ${AIRFLOW_HOME}
+
+# Expose ports
+EXPOSE 8080 5555 8793
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=3 \
+    CMD python ${AIRFLOW_HOME}/scripts/health_check.py || exit 1
+
+# Default command (can be overridden in docker-compose)
+CMD ["airflow", "webserver"]

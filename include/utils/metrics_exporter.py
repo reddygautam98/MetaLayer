@@ -143,5 +143,40 @@ def start_metrics_collection():
     except KeyboardInterrupt:
         logger.info("Shutting down metrics collector...")
 
+def export_pipeline_metrics(dag_id, task_id, status, execution_time=None, records_processed=0):
+    """
+    Export pipeline execution metrics to Prometheus
+    
+    Args:
+        dag_id: Airflow DAG identifier
+        task_id: Airflow task identifier  
+        status: Task execution status (success, failed, running)
+        execution_time: Task execution duration in seconds
+        records_processed: Number of records processed by the task
+    """
+    try:
+        logger.info(f"Exporting metrics for {dag_id}.{task_id}: status={status}")
+        
+        # Update records processed counter
+        if records_processed > 0:
+            records_processed_total.labels(
+                layer=dag_id,
+                table=task_id,
+                operation=status
+            ).inc(records_processed)
+        
+        # Update execution time histogram
+        if execution_time:
+            incremental_processing_duration.labels(
+                layer=dag_id,
+                table=task_id,
+                operation=status
+            ).observe(execution_time)
+            
+        logger.info(f"Successfully exported metrics for {dag_id}.{task_id}")
+        
+    except Exception as e:
+        logger.error(f"Error exporting pipeline metrics: {e}")
+
 if __name__ == "__main__":
     start_metrics_collection()

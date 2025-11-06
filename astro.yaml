@@ -1,0 +1,12 @@
+project:
+  name: etl-pipeline-airflow-astro
+  description: "End-to-end ETL pipeline using Apache Airflow and Astro"
+
+webserver:
+  port: 8080
+
+scheduler:
+  standalone_dag_processor: false
+
+local:
+  env: ".env"

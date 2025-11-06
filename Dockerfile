@@ -1,82 +1,110 @@
-# Multi-stage Production MetaLayer Dockerfile - PostgreSQL Architecture
+# =====================================================
+# ETL PIPELINE - OPTIMIZED MULTI-STAGE BUILD
+# Apache Airflow 2.8.1 with Python 3.11 (Stable Version)
+# =====================================================
 
-# Stage 1: Build Dependencies
-FROM quay.io/astronomer/astro-runtime:12.1.0-base AS builder
+ARG AIRFLOW_VERSION=2.8.1
+ARG PYTHON_VERSION="3.11"
 
-# Switch to root for dependency installation
+# =====================================================
+# STAGE 1: Dependencies Installation
+# =====================================================
+FROM apache/airflow:${AIRFLOW_VERSION}-python${PYTHON_VERSION} AS dependencies
+
+USER airflow
+COPY --chown=airflow:root requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r /tmp/requirements.txt
+
+# =====================================================
+# STAGE 2: Production Image
+# =====================================================
+FROM apache/airflow:${AIRFLOW_VERSION}-python${PYTHON_VERSION}
+
+# =====================================================
+# METADATA & LABELS
+# =====================================================
+LABEL maintainer="ETL Pipeline Team"
+LABEL version="1.0.0"
+LABEL description="Production ETL Pipeline with Airflow, PostgreSQL, and Monitoring"
+
+# =====================================================
+# ENVIRONMENT VARIABLES
+# =====================================================
+ENV AIRFLOW_HOME=/opt/airflow
+ENV PYTHONPATH="${PYTHONPATH}:${AIRFLOW_HOME}/include"
+ENV ETL_ENVIRONMENT=docker
+ENV PYTHONUNBUFFERED=1
+
+# =====================================================
+# SYSTEM DEPENDENCIES
+# =====================================================
 USER root
 
-# Install build dependencies
-COPY packages.txt .
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+# Install system packages for ETL processing
+RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    apt-transport-https \
-    gnupg \
-    ca-certificates \
-    build-essential \
-    && cat packages.txt | xargs apt-get install -y --no-install-recommends \
+    netcat-openbsd \
+    postgresql-client \
+    procps \
+    unzip \
+    wget \
+    && apt-get autoremove -yqq --purge \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies with security and performance optimizations
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir --compile --no-deps -r requirements.txt && \
-    pip check && \
-    rm -rf /root/.cache/pip
+# =====================================================
+# COPY DEPENDENCIES FROM STAGE 1
+# =====================================================
+USER airflow
 
-# Stage 2: Production Image
-FROM quay.io/astronomer/astro-runtime:12.1.0-base AS production
+# Copy installed packages from dependencies stage
+COPY --from=dependencies --chown=airflow:root /home/airflow/.local /home/airflow/.local
 
-# Security: Run as non-root user
+# =====================================================
+# ETL PIPELINE CODE
+# =====================================================
+# Copy DAGs
+COPY --chown=airflow:root dags/ ${AIRFLOW_HOME}/dags/
+
+# Copy include directory (utilities, SQL, monitoring)
+COPY --chown=airflow:root include/ ${AIRFLOW_HOME}/include/
+
+# Copy plugins
+COPY --chown=airflow:root plugins/ ${AIRFLOW_HOME}/plugins/
+
+# Copy configuration files
+COPY --chown=airflow:root config/ ${AIRFLOW_HOME}/config/
+
+# Copy test data
+COPY --chown=airflow:root data/ ${AIRFLOW_HOME}/data/
+
+# Copy scripts
+COPY --chown=airflow:root scripts/ ${AIRFLOW_HOME}/scripts/
+
+# Create tests directory (tests will be mounted via volume)
+RUN mkdir -p ${AIRFLOW_HOME}/tests/
+
+# =====================================================
+# SETUP PERMISSIONS
+# =====================================================
 USER root
 
-# Install only runtime dependencies (no build tools)
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    curl \
-    ca-certificates \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+# Set proper ownership and permissions
+RUN chown -R airflow:root ${AIRFLOW_HOME} && \
+    chmod +x ${AIRFLOW_HOME}/scripts/health_check.py
 
-# Copy Python packages from builder stage
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-
-# Copy project files with proper structure and security
-COPY --chown=astro:astro dags/ /opt/airflow/dags/
-COPY --chown=astro:astro include/ /opt/airflow/include/
-COPY --chown=astro:astro plugins/ /opt/airflow/plugins/
-
-# Create necessary directories with proper permissions and security
-RUN mkdir -p /opt/airflow/logs /opt/airflow/data /opt/airflow/config /opt/airflow/temp /home/astro/.cache && \
-    chown -R astro:astro /opt/airflow/ /home/astro && \
-    chmod -R 755 /opt/airflow/ && \
-    chmod 700 /home/astro
-
-# Add comprehensive production health check
-HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8080/health || \
-        (ps aux | grep -v grep | grep -q airflow && exit 0 || exit 1)
-
-# Switch back to astro user for security
-USER astro
+USER airflow
 
 # Set working directory
-WORKDIR /opt/airflow
+WORKDIR ${AIRFLOW_HOME}
 
-# Set production environment variables with security focus
-ENV AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true \
-    AIRFLOW__CORE__LOAD_EXAMPLES=false \
-    AIRFLOW__WEBSERVER__EXPOSE_CONFIG=false \
-    AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG=8 \
-    AIRFLOW__CORE__PARALLELISM=64 \
-    AIRFLOW__CORE__DAG_CONCURRENCY=32 \
-    AIRFLOW__CORE__SECURITY=true \
-    PYTHONPATH=/opt/airflow \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+# Expose ports
+EXPOSE 8080 5555 8793
 
-# Default production command
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=3 \
+    CMD python ${AIRFLOW_HOME}/scripts/health_check.py || exit 1
+
+# Default command
 CMD ["airflow", "webserver"]

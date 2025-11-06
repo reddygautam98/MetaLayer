@@ -1,4 +1,7 @@
-unixodbc
-unixodbc-dev
+# System packages for Astro ETL Pipeline Runtime
+git
+postgresql-client
+build-essential
+curl
 gcc
 g++

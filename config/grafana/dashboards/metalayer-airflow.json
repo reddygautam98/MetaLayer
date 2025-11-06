@@ -540,7 +540,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "MetaLayer Airflow & Data Pipeline Dashboard",
+  "title": "MetaLayer Airflow Monitoring (Legacy)",
   "uid": "metalayer_airflow",
   "version": 1
 }

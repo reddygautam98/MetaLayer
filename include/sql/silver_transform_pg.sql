@@ -32,11 +32,11 @@ TRUNCATE TABLE silver.customers;
 
 INSERT INTO silver.customers (customer_id, customer_name, email, phone, country, created_at)
 SELECT
-  TRIM(customer_id),
+  customer_id::TEXT,  -- Convert integer to text
   NULLIF(TRIM(customer_name), ''),
   LOWER(NULLIF(TRIM(email), '')),
-  NULLIF(TRIM(phone), ''),
-  UPPER(NULLIF(TRIM(country), '')),
-  created_at::DATE
+  NULL as phone,  -- No phone column in bronze, set to NULL
+  UPPER(NULLIF(TRIM(region), '')),  -- Use region column as country
+  CURRENT_DATE as created_at  -- Set current date since no created_at in bronze
 FROM bronze.crm_customers_raw
 WHERE customer_id IS NOT NULL;

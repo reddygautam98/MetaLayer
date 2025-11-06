@@ -11,20 +11,32 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any
 
 
+@pytest.fixture
+def db_connection():
+    """Module-level database connection fixture for testing.
+
+    This fixture attempts to connect to the database URL taken from the
+    `DATABASE_URL` environment variable and yields a psycopg2 connection.
+    If the connection fails the tests are skipped (same behavior as before).
+    """
+    database_url = os.getenv('DATABASE_URL', 'postgresql://test_user:test_password@localhost:5432/test_airflow')
+
+    try:
+        conn = psycopg2.connect(database_url)
+    except Exception as e:
+        pytest.skip(f"Database connection failed: {e}")
+
+    try:
+        yield conn
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
 class TestDataQuality:
     """Data Quality Test Suite"""
-    
-    @pytest.fixture
-    def db_connection(self):
-        """Database connection fixture for testing"""
-        database_url = os.getenv('DATABASE_URL', 'postgresql://test_user:test_password@localhost:5432/test_airflow')
-        
-        try:
-            conn = psycopg2.connect(database_url)
-            yield conn
-            conn.close()
-        except Exception as e:
-            pytest.skip(f"Database connection failed: {e}")
     
     def test_bronze_layer_completeness(self, db_connection):
         """Test bronze layer data completeness"""

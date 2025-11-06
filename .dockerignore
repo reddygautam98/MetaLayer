@@ -1,8 +1,103 @@
-astro
+# =====================================================
+# DOCKER IGNORE FILE FOR ETL PIPELINE
+# Excludes unnecessary files from Docker build context
+# =====================================================
+
+# Git and version control
 .git
+.gitignore
+.github
+
+# Documentation
+*.md
+docs/
+LICENSE
+
+# Environment files (will be mounted as volumes)
 .env
-airflow_settings.yaml
+.env.template
+
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.venv/
+venv/
+ENV/
+env/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
 logs/
-.venv
-airflow.db
-airflow.cfg
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Docker files (build context)
+Dockerfile.production
+docker-compose.*.yml
+.dockerignore
+
+# Backup files
+backups/
+*.bak
+*.backup
+*.sql
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Analysis and report files
+*_REPORT.md
+*_SUMMARY.md
+*.json
+metalayer_analysis_report.json
+OPTIMIZATION_IMPLEMENTATION_REPORT.md
+PRODUCTION_CHECKLIST.md
+PRODUCTION_DEPLOYMENT_SUMMARY.md
+PROJECT_TRANSFORMATION_SUMMARY.md
+SENIOR_DATA_ENGINEER_REVIEW.md
+DOCKER_REMOVAL_SUMMARY.md
+
+# Custom compose files
+custom-*.yml
+docker-compose.override.yml.bak
+
+# Test files (will be mounted as volumes)
+tests/
+test_*.py

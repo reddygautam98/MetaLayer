@@ -20,6 +20,6 @@ with DAG(
     create_schemas = MsSqlOperator(
         task_id="create_schemas",
         mssql_conn_id="mssql_default",
-        sql="/opt/airflow/include/sql/init_schemas.sql",
+        sql="' + os.path.join(os.environ.get('AIRFLOW_HOME', '~/airflow'), 'include/sql/init_schemas.sql",
         autocommit=True
     )

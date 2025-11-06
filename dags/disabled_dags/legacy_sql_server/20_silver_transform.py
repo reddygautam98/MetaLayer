@@ -12,5 +12,5 @@ with DAG(
     silver_sql = MsSqlOperator(
         task_id="run_silver_sql",
         mssql_conn_id="mssql_default",
-        sql="/opt/airflow/include/sql/silver_transform.sql"
+        sql="' + os.path.join(os.environ.get('AIRFLOW_HOME', '~/airflow'), 'include/sql/silver_transform.sql"
     )

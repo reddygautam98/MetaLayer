@@ -420,3 +420,44 @@ def execute_batch_with_pool(query: str,
     """Execute batch operations using optimized connection pool"""
     pool = get_optimized_connection(conn_id)
     return pool.execute_batch(query, parameter_list, batch_size)
+
+def get_db_connection(conn_id: str = 'postgres_default'):
+    """
+    Get a database connection using Airflow PostgresHook
+    
+    Args:
+        conn_id: Airflow connection ID for the database
+        
+    Returns:
+        Database connection object
+    """
+    try:
+        hook = PostgresHook(postgres_conn_id=conn_id)
+        return hook.get_conn()
+    except Exception as e:
+        logger.error(f"Failed to get database connection for {conn_id}: {e}")
+        raise AirflowException(f"Database connection failed: {e}")
+
+@contextmanager
+def get_db_connection_context(conn_id: str = 'postgres_default'):
+    """
+    Context manager for database connections
+    
+    Args:
+        conn_id: Airflow connection ID for the database
+        
+    Yields:
+        Database connection object
+    """
+    conn = None
+    try:
+        conn = get_db_connection(conn_id)
+        yield conn
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Database operation failed: {e}")
+        raise
+    finally:
+        if conn:
+            conn.close()

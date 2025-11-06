@@ -6,7 +6,7 @@ from airflow.providers.microsoft.mssql.hooks.mssql import MsSqlHook
 from airflow.providers.microsoft.mssql.operators.mssql import MsSqlOperator
 from airflow.operators.python import PythonOperator
 
-DATA_DIR = "/opt/airflow/data/bronze_src"
+DATA_DIR = "' + os.path.join(os.environ.get('AIRFLOW_HOME', '~/airflow'), 'data/bronze_src"
 
 def load_csv_to_table(csv_path: str, table: str):
     hook = MsSqlHook(mssql_conn_id="mssql_default")
@@ -32,7 +32,7 @@ with DAG(
     create_bronze_tables = MsSqlOperator(
         task_id="create_bronze_tables",
         mssql_conn_id="mssql_default",
-        sql="/opt/airflow/include/sql/bronze_ddl.sql"
+        sql="' + os.path.join(os.environ.get('AIRFLOW_HOME', '~/airflow'), 'include/sql/bronze_ddl.sql"
     )
 
     load_erp = PythonOperator(task_id="load_erp_orders", python_callable=load_erp_orders)

@@ -690,6 +690,90 @@ class DataQualityMonitor:
             logger.error(f"Failed to get dashboard data: {e}")
             return {'error': str(e)}
 
+def basic_data_quality_check(table_name: str, 
+                            schema_name: str = 'bronze',
+                            conn_id: str = 'postgres_default') -> Dict[str, Any]:
+    """
+    Basic data quality check when Great Expectations is not available
+    Performs essential data validation using SQL queries
+    """
+    hook = PostgresHook(postgres_conn_id=conn_id)
+    
+    try:
+        full_table_name = f"{schema_name}.{table_name}"
+        
+        # Basic metrics
+        record_count = hook.get_first(f"SELECT COUNT(*) FROM {full_table_name}")[0]
+        
+        # Get table columns
+        columns_query = f"""
+        SELECT column_name, data_type, is_nullable 
+        FROM information_schema.columns 
+        WHERE table_schema = '{schema_name}' AND table_name = '{table_name}'
+        ORDER BY ordinal_position
+        """
+        columns = hook.get_records(columns_query)
+        
+        metrics = []
+        issues = []
+        
+        for column_name, data_type, is_nullable in columns:
+            # Check for null values
+            null_count = hook.get_first(f"""
+                SELECT COUNT(*) FROM {full_table_name} 
+                WHERE {column_name} IS NULL
+            """)[0]
+            
+            null_percentage = (null_count / record_count * 100) if record_count > 0 else 0
+            
+            metrics.append({
+                'column': column_name,
+                'data_type': data_type,
+                'null_count': null_count,
+                'null_percentage': round(null_percentage, 2)
+            })
+            
+            # Flag potential issues
+            if is_nullable == 'NO' and null_count > 0:
+                issues.append(f"Column {column_name} has {null_count} null values but is NOT NULL")
+            
+            if null_percentage > 50:
+                issues.append(f"Column {column_name} has high null percentage: {null_percentage}%")
+        
+        # Additional table-specific checks
+        if 'email' in [col[0] for col in columns]:
+            invalid_emails = hook.get_first(f"""
+                SELECT COUNT(*) FROM {full_table_name} 
+                WHERE email IS NOT NULL AND email NOT LIKE '%@%'
+            """)[0]
+            
+            if invalid_emails > 0:
+                issues.append(f"Found {invalid_emails} invalid email formats")
+        
+        # Calculate quality score
+        quality_score = max(0, 100 - len(issues) * 10)
+        
+        return {
+            'table_name': full_table_name,
+            'record_count': record_count,
+            'column_count': len(columns),
+            'column_metrics': metrics,
+            'quality_issues': issues,
+            'quality_score': quality_score,
+            'check_type': 'basic_sql_validation',
+            'timestamp': datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Basic quality check failed for {full_table_name}: {e}")
+        return {
+            'table_name': f"{schema_name}.{table_name}",
+            'error': str(e),
+            'quality_score': 0,
+            'check_type': 'basic_sql_validation',
+            'timestamp': datetime.now().isoformat()
+        }
+
 # Factory functions for DAG integration
 def create_quality_monitor(conn_id: str = 'postgres_default') -> DataQualityMonitor:
     """Create data quality monitor instance"""
@@ -699,17 +783,196 @@ def run_table_quality_check(table_name: str,
                            schema_name: str = 'bronze',
                            conn_id: str = 'postgres_default') -> Dict[str, Any]:
     """Run quality check for a specific table"""
-    monitor = create_quality_monitor(conn_id)
+    if not GX_AVAILABLE:
+        # Use basic fallback when Great Expectations is not available
+        logger.info("Using basic SQL-based quality checks (Great Expectations not available)")
+        return basic_data_quality_check(table_name, schema_name, conn_id)
     
-    # Create expectation suite if it doesn't exist
-    monitor.create_expectation_suite(table_name, schema_name)
-    
-    # Run quality check
-    result = monitor.run_quality_check(table_name, schema_name)
-    
-    return asdict(result)
+    try:
+        monitor = create_quality_monitor(conn_id)
+        
+        # Create expectation suite if it doesn't exist
+        monitor.create_expectation_suite(table_name, schema_name)
+        
+        # Run quality check
+        result = monitor.run_quality_check(table_name, schema_name)
+        
+        return asdict(result)
+    except Exception as e:
+        logger.warning(f"Great Expectations check failed, falling back to basic checks: {e}")
+        return basic_data_quality_check(table_name, schema_name, conn_id)
 
 def get_quality_dashboard() -> Dict[str, Any]:
     """Get quality dashboard data"""
     monitor = create_quality_monitor()
     return monitor.get_quality_dashboard_data()
+
+class DataQualityValidator:
+    """Simple data quality validator for ETL pipeline validation"""
+    
+    def __init__(self, conn_id: str = 'postgres_default'):
+        self.conn_id = conn_id
+        self.hook = PostgresHook(postgres_conn_id=conn_id)
+        logger.info(f"DataQualityValidator initialized with connection: {conn_id}")
+    
+    def validate_table_completeness(self, table_name: str, schema_name: str = 'bronze') -> Dict[str, Any]:
+        """
+        Validate table completeness (no null values in key fields)
+        
+        Args:
+            table_name: Name of the table to validate
+            schema_name: Schema name (default: bronze)
+            
+        Returns:
+            Dict with validation results
+        """
+        try:
+            # Check for null values in key fields
+            query = f"""
+            SELECT 
+                COUNT(*) as total_rows,
+                COUNT(CASE WHEN customer_id IS NULL THEN 1 END) as null_customer_ids,
+                COUNT(CASE WHEN created_at IS NULL THEN 1 END) as null_created_dates
+            FROM {schema_name}.{table_name}
+            """
+            
+            result = self.hook.get_first(query)
+            
+            total_rows = result[0] if result else 0
+            null_customer_ids = result[1] if result and len(result) > 1 else 0
+            null_created_dates = result[2] if result and len(result) > 2 else 0
+            
+            completeness_score = 1.0
+            if total_rows > 0:
+                completeness_score = max(0.0, 1.0 - (null_customer_ids + null_created_dates) / (total_rows * 2))
+            
+            return {
+                'table_name': f"{schema_name}.{table_name}",
+                'total_rows': total_rows,
+                'null_customer_ids': null_customer_ids,
+                'null_created_dates': null_created_dates,
+                'completeness_score': round(completeness_score, 3),
+                'validation_time': datetime.now().isoformat(),
+                'status': 'PASSED' if completeness_score >= 0.95 else 'FAILED'
+            }
+            
+        except Exception as e:
+            logger.error(f"Completeness validation failed for {schema_name}.{table_name}: {e}")
+            return {
+                'table_name': f"{schema_name}.{table_name}",
+                'error': str(e),
+                'status': 'ERROR',
+                'validation_time': datetime.now().isoformat()
+            }
+    
+    def validate_data_freshness(self, table_name: str, schema_name: str = 'bronze', 
+                               date_column: str = 'created_at', max_age_hours: int = 24) -> Dict[str, Any]:
+        """
+        Validate data freshness (recent data available)
+        
+        Args:
+            table_name: Name of the table to validate
+            schema_name: Schema name (default: bronze)  
+            date_column: Column name for date validation
+            max_age_hours: Maximum age of data in hours
+            
+        Returns:
+            Dict with validation results
+        """
+        try:
+            query = f"""
+            SELECT 
+                MAX({date_column}) as latest_record,
+                COUNT(*) as total_rows,
+                COUNT(CASE WHEN {date_column} >= NOW() - INTERVAL '{max_age_hours} hours' THEN 1 END) as recent_rows
+            FROM {schema_name}.{table_name}
+            WHERE {date_column} IS NOT NULL
+            """
+            
+            result = self.hook.get_first(query)
+            
+            if not result or not result[0]:
+                return {
+                    'table_name': f"{schema_name}.{table_name}",
+                    'error': 'No data found or invalid date column',
+                    'status': 'FAILED',
+                    'validation_time': datetime.now().isoformat()
+                }
+            
+            latest_record = result[0]
+            total_rows = result[1] if result[1] else 0
+            recent_rows = result[2] if result[2] else 0
+            
+            # Calculate time since latest record
+            now = datetime.now()
+            if isinstance(latest_record, str):
+                latest_record = datetime.fromisoformat(latest_record.replace('Z', '+00:00'))
+            
+            hours_since_latest = (now - latest_record.replace(tzinfo=None)).total_seconds() / 3600
+            
+            freshness_score = max(0.0, 1.0 - (hours_since_latest / max_age_hours))
+            
+            return {
+                'table_name': f"{schema_name}.{table_name}",
+                'latest_record': latest_record.isoformat(),
+                'hours_since_latest': round(hours_since_latest, 2),
+                'total_rows': total_rows,
+                'recent_rows': recent_rows,
+                'freshness_score': round(freshness_score, 3),
+                'validation_time': datetime.now().isoformat(),
+                'status': 'PASSED' if hours_since_latest <= max_age_hours else 'FAILED'
+            }
+            
+        except Exception as e:
+            logger.error(f"Freshness validation failed for {schema_name}.{table_name}: {e}")
+            return {
+                'table_name': f"{schema_name}.{table_name}",
+                'error': str(e),
+                'status': 'ERROR',
+                'validation_time': datetime.now().isoformat()
+            }
+    
+    def validate_data_quality(self, table_name: str, schema_name: str = 'bronze') -> Dict[str, Any]:
+        """
+        Comprehensive data quality validation
+        
+        Args:
+            table_name: Name of the table to validate
+            schema_name: Schema name (default: bronze)
+            
+        Returns:
+            Dict with comprehensive validation results
+        """
+        try:
+            logger.info(f"Running data quality validation for {schema_name}.{table_name}")
+            
+            # Run completeness check
+            completeness_result = self.validate_table_completeness(table_name, schema_name)
+            
+            # Run freshness check  
+            freshness_result = self.validate_data_freshness(table_name, schema_name)
+            
+            # Calculate overall quality score
+            completeness_score = completeness_result.get('completeness_score', 0.0)
+            freshness_score = freshness_result.get('freshness_score', 0.0)
+            
+            overall_score = (completeness_score + freshness_score) / 2
+            overall_status = 'PASSED' if overall_score >= 0.8 else 'FAILED'
+            
+            return {
+                'table_name': f"{schema_name}.{table_name}",
+                'overall_score': round(overall_score, 3),
+                'overall_status': overall_status,
+                'completeness': completeness_result,
+                'freshness': freshness_result,
+                'validation_time': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Data quality validation failed for {schema_name}.{table_name}: {e}")
+            return {
+                'table_name': f"{schema_name}.{table_name}",
+                'error': str(e),
+                'status': 'ERROR',
+                'validation_time': datetime.now().isoformat()
+            }

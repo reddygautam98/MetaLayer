@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 🐍 Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -41,7 +41,7 @@ jobs:
           safety check --json --output safety-report.json || true
 
       - name: 📊 Upload Security Audit Reports
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: dependency-security-reports
@@ -98,7 +98,7 @@ jobs:
           sarif_file: 'trivy-results.sarif'
 
       - name: 📊 Upload Security Scan Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: container-security-reports
@@ -119,7 +119,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 🐍 Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -144,7 +144,7 @@ jobs:
           extra_args: --debug --only-verified
 
       - name: 📊 Upload Code Security Reports
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: code-security-reports
@@ -273,7 +273,7 @@ jobs:
           EOF
 
       - name: 📊 Upload Compliance Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: compliance-audit-report
           path: reports/compliance-report.md

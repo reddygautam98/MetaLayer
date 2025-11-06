@@ -39,7 +39,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -250,7 +250,7 @@ jobs:
           EOF
 
       - name: Upload performance artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: performance-report-${{ github.run_number }}
           path: |
@@ -341,7 +341,7 @@ jobs:
           EOF
 
       - name: Upload monitoring artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: monitoring-health-report-${{ github.run_number }}
           path: monitoring_health_report.md

@@ -38,7 +38,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 🐍 Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -73,7 +73,7 @@ jobs:
           python tests/data_quality/generate_report.py
 
       - name: 📊 Upload Data Quality Reports
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: data-quality-reports
           path: |
@@ -133,7 +133,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 🐍 Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -147,7 +147,7 @@ jobs:
           python tests/performance/test_dag_performance.py
 
       - name: 📊 Upload Performance Results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: performance-reports
           path: reports/performance_*.json

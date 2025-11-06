@@ -3,9 +3,9 @@ from airflow import DAG
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 
 default_args = {
-    'owner': 'data-team',
-    'retries': 1,
-    'retry_delay': timedelta(minutes=5),
+    "owner": "data-team",
+    "retries": 1,
+    "retry_delay": timedelta(minutes=5),
 }
 
 with DAG(
@@ -15,7 +15,7 @@ with DAG(
     schedule=None,
     catchup=False,
     doc_md="Create Medallion schemas (bronze/silver/gold) - PostgreSQL Version",
-    tags=['setup', 'database', 'medallion', 'postgresql']
+    tags=["setup", "database", "medallion", "postgresql"],
 ):
     create_schemas = SQLExecuteQueryOperator(
         task_id="create_schemas",
@@ -25,5 +25,5 @@ with DAG(
         CREATE SCHEMA IF NOT EXISTS bronze;
         CREATE SCHEMA IF NOT EXISTS silver;
         CREATE SCHEMA IF NOT EXISTS gold;
-        """
+        """,
     )

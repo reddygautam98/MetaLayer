@@ -88,7 +88,7 @@ jobs:
       - name: Run Safety (Dependency Vulnerability Check)
         run: |
           echo "🔒 Checking for vulnerable dependencies..."
-          safety check --json --output safety-report.json || true
+          safety check --json > safety-report.json || true
 
       - name: Upload security reports
         uses: actions/upload-artifact@v4

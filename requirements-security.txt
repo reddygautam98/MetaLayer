@@ -1,0 +1,17 @@
+# Security Tools Dependencies
+# Pin compatible versions to avoid OpenTelemetry conflicts
+
+# Core security scanning tools
+bandit==1.7.5
+safety==3.2.7
+
+# OpenTelemetry stack - compatible versions
+opentelemetry-api==1.37.0
+opentelemetry-semantic-conventions==0.58b0
+opentelemetry-instrumentation-requests==0.58b0
+
+# Static analysis
+semgrep==1.142.1
+
+# Additional security tools
+pip-audit==2.6.1

@@ -45,7 +45,7 @@ jobs:
       - name: 🛡️ Safety Check for Known Vulnerabilities
         run: |
           pip install safety
-          safety check --json --output safety-report.json || true
+          safety check --json > safety-report.json || true
 
       - name: 📊 Upload Security Audit Reports
         uses: actions/upload-artifact@v4
@@ -132,7 +132,8 @@ jobs:
 
       - name: 📦 Install Security Tools
         run: |
-          pip install bandit semgrep
+          # Install security tools with compatible versions
+          pip install -r requirements-security.txt
 
       - name: 🔍 Run Bandit Security Linter
         run: |

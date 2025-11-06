@@ -11,6 +11,11 @@ on:
       - 'Dockerfile'
       - '.github/workflows/**'
 
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
 jobs:
   # ===========================================
   # DEPENDENCY SECURITY AUDIT
@@ -92,8 +97,8 @@ jobs:
             docker/docker-bench-security > docker-bench-results.txt || true
 
       - name: 📊 Upload Container Security Results
-        uses: github/codeql-action/upload-sarif@v2
-        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && hashFiles('trivy-results.sarif') != ''
         with:
           sarif_file: 'trivy-results.sarif'
 
@@ -192,8 +197,8 @@ jobs:
           fi
 
       - name: 📊 Upload Infrastructure Security Results
-        uses: github/codeql-action/upload-sarif@v2
-        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && hashFiles('trivy-config-results.sarif') != ''
         with:
           sarif_file: 'trivy-config-results.sarif'
 

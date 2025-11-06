@@ -9,3 +9,12 @@ airflow-webserver.pid
 webserver_config.py
 airflow.cfg
 airflow.db
+
+# Large data files (use Git LFS or keep local only)
+data/bronze_src/**/*.csv
+data/**/*.csv
+*.csv
+# Exclude files larger than 50MB
+data/bronze_src/crm/crm_customers.csv
+data/bronze_src/crm/customers.csv
+data/bronze_src/erp/orders.csv

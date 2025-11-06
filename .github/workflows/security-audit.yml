@@ -143,12 +143,26 @@ jobs:
         run: |
           semgrep --config=auto --json --output=semgrep-security-report.json dags/ plugins/ || true
 
-      - name: 🔍 Check for Secrets in Code
+      - name: Determine commit SHAs
+        id: commits
+        run: |
+          echo "base=${{ github.event.before }}" >> $GITHUB_OUTPUT
+          echo "head=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: 🔍 Check for Secrets in Code (commit-range if available)
+        if: ${{ github.event_name == 'push' && github.event.before != github.sha && github.event.before != '0000000000000000000000000000000000000000' }}
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          base: main
-          head: HEAD
+          base: ${{ github.event.before }}
+          head: ${{ github.sha }}
+          extra_args: --debug --only-verified
+
+      - name: 🔍 Check for Secrets in Code (full repo scan fallback)
+        if: ${{ github.event_name != 'push' || github.event.before == github.sha || github.event.before == '0000000000000000000000000000000000000000' }}
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
           extra_args: --debug --only-verified
 
       - name: 📊 Upload Code Security Reports

@@ -32,13 +32,16 @@
    # - 20GB+ available disk space
    ```
 
-2. **Clone and Start MetaLayer**
+2. **Start MetaLayer**
    ```bash
    git clone https://github.com/reddygautam98/MetaLayer.git
    cd MetaLayer
    
-   # Start all services
-   docker-compose up -d
+   # Start ETL services
+   docker-compose -f docker-compose-fast.yml up -d
+   
+   # Start monitoring stack (optional)
+   docker-compose -f docker-compose-monitoring.yml up -d
    
    # Wait for services to be ready (2-3 minutes)
    docker ps --format "table {{.Names}}\t{{.Status}}"
@@ -47,23 +50,27 @@
 3. **Verify Installation**
    ```bash
    # All containers should show "healthy" status
-   # Expected containers:
+   # Expected ETL containers:
    # - metalayer-webserver-1 (Airflow UI)
    # - metalayer-scheduler-1 (Airflow Scheduler) 
-   # - metalayer-triggerer-1 (Airflow Triggerer)
-   # - metalayer_postgres (Database)
-   # - metalayer_grafana (Monitoring)
-   # - metalayer_prometheus (Metrics)
-   # - metalayer_node_exporter (System metrics)
+   # - metalayer-worker-1 (Celery Worker)
+   # - metalayer-postgres-1 (PostgreSQL Database)
+   # - metalayer-redis-1 (Redis Cache)
+   
+   # Expected monitoring containers (if started):
+   # - metalayer-grafana (Dashboards)
+   # - metalayer-prometheus (Metrics Collection)
+   # - metalayer-metrics-exporter-1 (Custom ETL Metrics)
    ```
 
 ### Step 2: Access Platform Services
 
 | Service | URL | Login | Purpose |
 |---------|-----|-------|---------|
-| **Airflow UI** | http://localhost:8081 | admin/admin | DAG management & monitoring |
+| **Airflow UI** | http://localhost:8080 | admin/admin | DAG management & monitoring |
 | **Grafana** | http://localhost:3000 | admin/admin | Dashboards & visualization |
 | **Prometheus** | http://localhost:9090 | - | Metrics & alerting |
+| **Custom Metrics** | http://localhost:8000/metrics | - | Real-time ETL metrics |
 
 ---
 
@@ -134,29 +141,36 @@
 
 ### Key Production DAGs
 
-#### 1. `bronze_layer_production_load`
-- **Purpose**: Load raw data from source files into bronze tables
-- **Trigger**: Manual or API call
-- **Duration**: ~3-5 minutes for 1M records
-- **Monitor**: Check task `load_erp_sales_with_validation` for progress
-
-#### 2. `silver_layer_production_transform` 
-- **Purpose**: Transform bronze data into cleaned silver tables
-- **Trigger**: After bronze layer completion
-- **Duration**: ~2-3 minutes
-- **Monitor**: Watch `clean_sales_data` and `standardize_customers` tasks
-
-#### 3. `gold_layer_production_analytics`
-- **Purpose**: Create analytics-ready dimensional models
-- **Trigger**: After silver layer completion  
-- **Duration**: ~1-2 minutes
-- **Monitor**: Check `build_customer_analytics` and `create_sales_summary` tasks
-
-#### 4. `data_quality_monitoring`
-- **Purpose**: Validate data quality across all layers
-- **Trigger**: Every 6 hours (automatic)
+#### 1. `init_db_schemas_pg`
+- **Purpose**: Initialize PostgreSQL database schemas (bronze/silver/gold)
+- **Trigger**: Manual (run once during setup)
 - **Duration**: ~30 seconds
-- **Monitor**: Review quality metrics in task logs
+- **Monitor**: Check task `create_schemas` for completion
+- **Required**: Must run successfully before other DAGs
+
+#### 2. `bronze_layer_etl_pipeline`
+- **Purpose**: Load and validate raw data into bronze layer
+- **Trigger**: Manual or API call
+- **Duration**: ~3-5 minutes for large datasets
+- **Monitor**: Check tasks `validate_source_data`, `validate_bronze_layer`
+
+#### 3. `silver_layer_etl_pipeline` 
+- **Purpose**: Transform and clean bronze data into silver layer
+- **Trigger**: After bronze layer completion or manual
+- **Duration**: ~2-3 minutes
+- **Monitor**: Watch transformation and validation tasks
+
+#### 4. `gold_layer_analytics_pipeline`
+- **Purpose**: Create business-ready analytics from silver data
+- **Trigger**: After silver layer completion or manual
+- **Duration**: ~1-2 minutes
+- **Monitor**: Check analytics and aggregation tasks
+
+#### 5. `master_etl_orchestrator`
+- **Purpose**: Orchestrate complete Bronze→Silver→Gold pipeline
+- **Trigger**: Manual or scheduled
+- **Duration**: ~5-10 minutes for full pipeline
+- **Monitor**: Overall pipeline coordination and dependencies
 
 ### Common DAG Operations
 
@@ -190,23 +204,28 @@
 
 ### Available Dashboards
 
-#### 1. MetaLayer Overview Dashboard
-- **Pipeline Health**: Overall system status
-- **Records Processed**: Count by layer (Bronze/Silver/Gold)
-- **Data Freshness**: Time since last successful update
-- **Error Rates**: Failure percentage by component
+#### 1. MetaLayer ETL Overview Dashboard
+- **Pipeline Health**: Real-time Bronze→Silver→Gold status
+- **Records Processed**: `metalayer_records_processed_total` by layer
+- **Processing Duration**: `metalayer_incremental_processing_duration_seconds` with P50, P95, P99 percentiles
+- **Database Health**: `metalayer_db_pool_active_connections` and connection pool metrics
 
-#### 2. Airflow Monitoring Dashboard
-- **DAG Success Rate**: Percentage of successful runs
-- **Task Execution Times**: Performance metrics
-- **Resource Utilization**: CPU, memory, disk usage
-- **Queue Status**: Pending task counts
+#### 2. Data Quality Monitoring Dashboard
+- **Quality Scores**: `metalayer_data_quality_score` by layer and table
+- **Validation Results**: Real-time quality check results
+- **Processing Performance**: ETL task execution times
+- **Error Detection**: Pipeline failure rates and anomalies
 
-#### 3. Data Quality Dashboard
-- **Quality Scores**: Data quality metrics (0-1 scale)
-- **Validation Results**: Pass/fail counts by check type
-- **Anomaly Detection**: Unusual data patterns
-- **Data Profiling**: Statistical summaries
+#### 3. System Infrastructure Dashboard
+- **Container Health**: All MetaLayer service status
+- **Resource Utilization**: CPU, memory, disk usage per container
+- **Network Performance**: Inter-service communication metrics
+- **Database Performance**: PostgreSQL connection and query metrics
+
+#### Setting Up Dashboards
+1. **Import Dashboard JSON**: Use pre-configured dashboard from `config/grafana/dashboards/metalayer-etl-dashboard.json`
+2. **Add Prometheus Datasource**: Configure http://prometheus:9090 as data source
+3. **Configure Refresh**: Set 30-second intervals for real-time monitoring
 
 ### Interpreting Metrics
 
@@ -236,35 +255,48 @@
 
 ### Running the Complete Pipeline
 
-#### Option 1: Automatic Sequence (Recommended)
+#### Step 0: Initialize Database (First Time Only)
 ```bash
-# Trigger bronze layer (others will follow automatically)
-curl -X POST "http://localhost:8081/api/v1/dags/bronze_layer_production_load/dagRuns" \
+# Initialize schemas - REQUIRED before first run
+curl -X POST "http://localhost:8080/api/v1/dags/init_db_schemas_pg/dagRuns" \
+     -H "Content-Type: application/json" \
+     -u admin:admin \
+     -d '{}'
+```
+
+#### Option 1: Master Orchestrator (Recommended)
+```bash
+# Trigger complete Bronze→Silver→Gold pipeline
+curl -X POST "http://localhost:8080/api/v1/dags/master_etl_orchestrator/dagRuns" \
      -H "Content-Type: application/json" \
      -u admin:admin \
      -d '{}'
 ```
 
 #### Option 2: Manual Step-by-Step
-1. **Start Bronze Layer**
-   - Go to `bronze_layer_production_load` DAG
+1. **Initialize Database** (First time only)
+   - Go to `init_db_schemas_pg` DAG
+   - Click "Trigger DAG"
+   - Wait for completion (~30 seconds)
+
+2. **Start Bronze Layer**
+   - Go to `bronze_layer_etl_pipeline` DAG
    - Click "Trigger DAG"
    - Wait for completion (~3-5 minutes)
 
-2. **Run Silver Transformation**
-   - Go to `silver_layer_production_transform` DAG  
+3. **Run Silver Transformation**
+   - Go to `silver_layer_etl_pipeline` DAG  
    - Click "Trigger DAG"
    - Wait for completion (~2-3 minutes)
 
-3. **Execute Gold Analytics**
-   - Go to `gold_layer_production_analytics` DAG
+4. **Execute Gold Analytics**
+   - Go to `gold_layer_analytics_pipeline` DAG
    - Click "Trigger DAG" 
    - Wait for completion (~1-2 minutes)
 
-4. **Verify Data Quality**
-   - Go to `data_quality_monitoring` DAG
-   - Click "Trigger DAG"
-   - Review quality metrics
+5. **Monitor Real-time Metrics**
+   - Check http://localhost:8000/metrics for live ETL metrics
+   - View Grafana dashboards for visual monitoring
 
 ### Verifying Pipeline Success
 
@@ -410,7 +442,7 @@ docker exec metalayer-webserver-1 airflow dags list-import-errors
 **Diagnosis**:
 ```bash
 # Test database connection
-docker exec metalayer-webserver-1 airflow connections test postgres_default
+docker exec metalayer_webserver airflow connections test postgres_default
 ```
 
 **Solutions**:
@@ -428,10 +460,10 @@ docker exec metalayer-webserver-1 airflow connections test postgres_default
 **Diagnosis**:
 ```bash
 # Check resource usage
-docker stats metalayer-webserver-1 metalayer-scheduler-1
+docker stats metalayer_webserver metalayer_scheduler
 
 # Review container logs
-docker logs metalayer-webserver-1 --tail 100
+docker logs metalayer_webserver --tail 100
 ```
 
 **Solutions**:
@@ -458,10 +490,10 @@ docker logs metalayer-webserver-1 --tail 100
 #### Airflow Logs
 ```bash
 # Web server logs
-docker logs metalayer-webserver-1 -f
+docker logs metalayer_webserver -f
 
 # Scheduler logs  
-docker logs metalayer-scheduler-1 -f
+docker logs metalayer_scheduler -f
 
 # Task-specific logs (from Airflow UI)
 # Navigate to DAG → Task → Logs tab
@@ -488,7 +520,7 @@ docker stats --no-stream
 docker system df
 
 # Network connectivity
-docker exec metalayer-webserver-1 ping metalayer_postgres
+docker exec metalayer_webserver ping metalayer_postgres
 ```
 
 ### Recovery Procedures
@@ -576,34 +608,34 @@ process_data = PythonOperator(
 
 #### Triggering DAGs via REST API
 ```bash
-# Trigger with configuration
-curl -X POST "http://localhost:8081/api/v1/dags/bronze_layer_production_load/dagRuns" \
+# Trigger complete pipeline with configuration
+curl -X POST "http://localhost:8080/api/v1/dags/master_etl_orchestrator/dagRuns" \
      -H "Content-Type: application/json" \
      -u admin:admin \
      -d '{
        "conf": {
          "source_path": "/custom/data/path",
-         "processing_date": "2025-11-05"
+         "processing_date": "2025-11-06"
        }
      }'
 
 # Get DAG status
-curl "http://localhost:8081/api/v1/dags/bronze_layer_production_load" \
+curl "http://localhost:8080/api/v1/dags/bronze_layer_etl_pipeline" \
      -u admin:admin
 
 # List recent DAG runs
-curl "http://localhost:8081/api/v1/dags/bronze_layer_production_load/dagRuns?limit=10" \
+curl "http://localhost:8080/api/v1/dags/bronze_layer_etl_pipeline/dagRuns?limit=10" \
      -u admin:admin
 ```
 
 #### Monitoring via API
 ```bash
 # Get task instance status
-curl "http://localhost:8081/api/v1/dags/bronze_layer_production_load/dagRuns/manual__2025-11-05T12:00:00+00:00/taskInstances" \
+curl "http://localhost:8080/api/v1/dags/bronze_layer_etl_pipeline/dagRuns/manual__2025-11-06T12:00:00+00:00/taskInstances" \
      -u admin:admin
 
 # Export DAG structure
-curl "http://localhost:8081/api/v1/dags/bronze_layer_production_load/details" \
+curl "http://localhost:8080/api/v1/dags/bronze_layer_etl_pipeline/details" \
      -u admin:admin
 ```
 

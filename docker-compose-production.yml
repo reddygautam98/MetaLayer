@@ -1,0 +1,130 @@
+# =====================================================
+# METALAYER PRODUCTION DOCKER COMPOSE
+# Environment variables required - no fallback values
+# =====================================================
+
+version: '3.8'
+
+networks:
+  etl_pipeline_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  airflow_logs:
+
+services:
+  # =====================================================
+  # DATABASE (POSTGRESQL) - PRODUCTION
+  # =====================================================
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./include/sql:/opt/airflow/include/sql
+    ports:
+      - "5432:5432"
+    networks:
+      - etl_pipeline_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # =====================================================
+  # MESSAGE BROKER (REDIS) - PRODUCTION
+  # =====================================================
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "6379:6379"
+    networks:
+      - etl_pipeline_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "auth", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # =====================================================
+  # AIRFLOW COMMON CONFIGURATION - PRODUCTION
+  # =====================================================
+  x-airflow-common: &airflow-common
+    build: .
+    environment: &airflow-common-env
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+      AIRFLOW__CELERY__BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
+      AIRFLOW__WEBSERVER__RBAC: 'true'
+      _AIRFLOW_DB_MIGRATE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USERNAME}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
+    volumes:
+      - ${PWD}/dags:/opt/airflow/dags
+      - ${PWD}/logs:/opt/airflow/logs
+      - ${PWD}/config:/opt/airflow/config
+      - ${PWD}/include:/opt/airflow/include
+      - airflow_logs:/opt/airflow/logs
+    user: "50000:0"
+    depends_on: &airflow-common-depends-on
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  # =====================================================
+  # AIRFLOW SERVICES - PRODUCTION
+  # =====================================================
+  webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8080:8080"
+    networks:
+      - etl_pipeline_network
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  scheduler:
+    <<: *airflow-common
+    command: scheduler
+    networks:
+      - etl_pipeline_network
+    healthcheck:
+      test: ["CMD", "airflow", "jobs", "check", "--job-type", "SchedulerJob", "--hostname", "$${HOSTNAME}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  worker:
+    <<: *airflow-common
+    command: celery worker
+    networks:
+      - etl_pipeline_network
+    healthcheck:
+      test: ["CMD-SHELL", 'celery --app airflow.providers.celery.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped

@@ -666,14 +666,59 @@ start_task = DummyOperator(
     dag=dag
 )
 
-# Wait for Silver layer completion
-wait_for_silver = ExternalTaskSensor(
+# Check Silver layer data availability
+def check_silver_data_available(**context):
+    """
+    Check if there is recent data in Silver layer tables.
+    This is more flexible than ExternalTaskSensor for manual triggers.
+    """
+    execution_date = context['execution_date']
+    logger.info(f"🔍 Checking Silver layer data availability for {execution_date}")
+    
+    try:
+        hook = PostgresHook(postgres_conn_id='postgres_default')
+        
+        # Check for recent data in silver tables (within last 24 hours)
+        check_date = execution_date.date()
+        
+        customers_query = """
+            SELECT COUNT(*) 
+            FROM silver.dim_customers 
+            WHERE DATE(created_at) >= %s OR DATE(updated_at) >= %s
+        """
+        
+        orders_query = """
+            SELECT COUNT(*) 
+            FROM silver.fact_orders 
+            WHERE DATE(created_at) >= %s OR DATE(updated_at) >= %s
+        """
+        
+        customers_count = hook.get_first(customers_query, parameters=[check_date, check_date])[0]
+        orders_count = hook.get_first(orders_query, parameters=[check_date, check_date])[0]
+        
+        logger.info(f"📊 Found {customers_count} customers and {orders_count} orders in Silver layer for date {check_date}")
+        
+        if customers_count > 0 or orders_count > 0:
+            logger.info("✅ Silver data is available for processing")
+            return True
+        else:
+            raise AirflowException(f"❌ No Silver data found for {check_date}. Cannot proceed with Gold layer processing.")
+    
+    except Exception as e:
+        logger.error(f"❌ Error checking Silver data availability: {str(e)}")
+        raise
+
+wait_for_silver = PythonOperator(
     task_id='wait_for_silver_completion',
-    external_dag_id='silver_layer_etl_pipeline',
-    external_task_id='end_silver_pipeline',
-    timeout=3600,
-    poke_interval=300,
-    dag=dag
+    python_callable=check_silver_data_available,
+    dag=dag,
+    doc_md="""
+    ## Check Silver Data Availability
+    
+    Verifies that Silver layer data is available for processing.
+    This approach is more flexible than ExternalTaskSensor for manual triggers
+    and mixed scheduling scenarios.
+    """
 )
 
 # Build customer dimension

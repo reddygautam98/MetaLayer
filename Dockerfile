@@ -32,9 +32,9 @@ LABEL description="Production ETL Pipeline with Airflow, PostgreSQL, and Monitor
 # ENVIRONMENT VARIABLES
 # =====================================================
 ENV AIRFLOW_HOME=/opt/airflow
-ENV PYTHONPATH="${PYTHONPATH}:${AIRFLOW_HOME}/include"
 ENV ETL_ENVIRONMENT=docker
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH="${AIRFLOW_HOME}/include:/opt/airflow"
 
 # =====================================================
 # SYSTEM DEPENDENCIES

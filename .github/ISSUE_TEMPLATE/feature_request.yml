@@ -1,0 +1,93 @@
+name: ✨ Feature Request
+description: Suggest a new feature or enhancement for MetaLayer
+title: "[FEATURE] "
+labels: ["enhancement", "triage-needed"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature! 
+        
+        Please provide as much detail as possible to help us understand your request.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component would this feature affect?
+      options:
+        - Bronze Layer (Data Ingestion)
+        - Silver Layer (Data Transformation)
+        - Gold Layer (Analytics)
+        - Database (PostgreSQL)
+        - Monitoring (Grafana/Prometheus)
+        - Docker/Deployment
+        - Documentation
+        - CI/CD
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      options:
+        - Low - Nice to have
+        - Medium - Would be helpful
+        - High - Important for my use case
+        - Critical - Blocking my workflow
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve?
+      placeholder: "I'm always frustrated when..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution you'd like to see
+      placeholder: "I would like to see..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternative Solutions
+      description: Have you considered any alternative solutions or workarounds?
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Use Case
+      description: Describe your specific use case for this feature
+    validations:
+      required: true
+
+  - type: textarea
+    id: implementation
+    attributes:
+      label: Implementation Ideas
+      description: Do you have any ideas on how this could be implemented?
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I would be willing to contribute to this feature
+          required: false
+        - label: I would be willing to help with testing
+          required: false
+        - label: I would be willing to help with documentation
+          required: false

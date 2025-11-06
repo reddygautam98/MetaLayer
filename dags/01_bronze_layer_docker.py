@@ -382,88 +382,40 @@ def validate_bronze_layer(**context) -> Dict[str, Any]:
     logger.info(f"🔍 Starting Bronze layer validation for {execution_date}")
     
     try:
-        hook = PostgresHook(postgres_conn_id='postgres_default')
-        validator = DataQualityValidator(hook)
-        
-        validation_results = {
-            'customers_validation': {},
-            'orders_validation': {},
-            'overall_quality_score': 0.0,
-            'issues_found': []
-        }
+        validator = DataQualityValidator('postgres_default')
         
         # Validate customers table
-        customers_checks = [
-            {
-                'name': 'record_count',
-                'query': "SELECT COUNT(*) FROM bronze.customers_raw WHERE DATE(ingestion_timestamp) = %s",
-                'params': [execution_date.date()],
-                'expected_min': 1
-            },
-            {
-                'name': 'null_customer_ids',
-                'query': "SELECT COUNT(*) FROM bronze.customers_raw WHERE customer_id IS NULL AND DATE(ingestion_timestamp) = %s",
-                'params': [execution_date.date()],
-                'expected_max': 0
-            },
-            {
-                'name': 'duplicate_customers',
-                'query': """
-                    SELECT COUNT(*) FROM (
-                        SELECT customer_id, COUNT(*) 
-                        FROM bronze.customers_raw 
-                        WHERE DATE(ingestion_timestamp) = %s
-                        GROUP BY customer_id 
-                        HAVING COUNT(*) > 1
-                    ) duplicates
-                """,
-                'params': [execution_date.date()],
-                'expected_max': 100  # Allow some duplicates from different sources
-            }
-        ]
+        customers_validation = validator.validate_data_quality('customers_raw', 'bronze')
         
-        validation_results['customers_validation'] = validator.run_validation_checks(customers_checks)
-        
-        # Validate orders table
-        orders_checks = [
-            {
-                'name': 'record_count',
-                'query': "SELECT COUNT(*) FROM bronze.orders_raw WHERE DATE(ingestion_timestamp) = %s",
-                'params': [execution_date.date()],
-                'expected_min': 1
-            },
-            {
-                'name': 'null_order_ids',
-                'query': "SELECT COUNT(*) FROM bronze.orders_raw WHERE order_id IS NULL AND DATE(ingestion_timestamp) = %s",
-                'params': [execution_date.date()],
-                'expected_max': 0
-            },
-            {
-                'name': 'invalid_amounts',
-                'query': "SELECT COUNT(*) FROM bronze.orders_raw WHERE (total_amount IS NULL OR total_amount <= 0) AND DATE(ingestion_timestamp) = %s",
-                'params': [execution_date.date()],
-                'expected_max': 50  # Allow some invalid amounts
-            }
-        ]
-        
-        validation_results['orders_validation'] = validator.run_validation_checks(orders_checks)
+        # Validate orders table  
+        orders_validation = validator.validate_data_quality('orders_raw', 'bronze')
         
         # Calculate overall quality score
-        all_checks = list(validation_results['customers_validation'].values()) + list(validation_results['orders_validation'].values())
-        passed_checks = sum(1 for check in all_checks if check.get('passed', False))
-        total_checks = len(all_checks)
-        
-        validation_results['overall_quality_score'] = passed_checks / total_checks if total_checks > 0 else 0
+        customers_score = customers_validation.get('overall_score', 0.0)
+        orders_score = orders_validation.get('overall_score', 0.0)
+        overall_quality_score = (customers_score + orders_score) / 2
         
         # Collect issues
-        for check_result in all_checks:
-            if not check_result.get('passed', False):
-                validation_results['issues_found'].append(check_result.get('message', 'Unknown issue'))
+        issues_found = []
+        if customers_validation.get('overall_status') != 'PASSED':
+            issues_found.append(f"Customers table: {customers_validation.get('error', 'Quality checks failed')}")
+        if orders_validation.get('overall_status') != 'PASSED':
+            issues_found.append(f"Orders table: {orders_validation.get('error', 'Quality checks failed')}")
         
-        logger.info(f"✅ Bronze layer validation completed: Quality Score = {validation_results['overall_quality_score']:.2%}")
+        validation_results = {
+            'customers_validation': customers_validation,
+            'orders_validation': orders_validation,
+            'overall_quality_score': round(overall_quality_score, 3),
+            'issues_found': issues_found,
+            'validation_time': datetime.now().isoformat()
+        }
         
-        if validation_results['issues_found']:
-            logger.warning(f"⚠️ Issues found: {validation_results['issues_found']}")
+        logger.info(f"✅ Bronze layer validation completed: Quality Score = {overall_quality_score:.2%}")
+        
+        if issues_found:
+            logger.warning(f"⚠️ Issues found: {issues_found}")
+        else:
+            logger.info("🎉 All validation checks passed!")
         
         # Export validation metrics
         export_pipeline_metrics('bronze_validation', validation_results, execution_date)

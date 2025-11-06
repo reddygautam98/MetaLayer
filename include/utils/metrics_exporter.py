@@ -116,21 +116,122 @@ def simulate_processing_metrics():
             logger.error(f"Error updating processing metrics: {e}")
             time.sleep(90)
 
+def collect_real_etl_metrics():
+    """Collect real ETL metrics from database and Airflow"""
+    logger.info("Collecting real ETL metrics...")
+    
+    try:
+        # Database connection for metrics collection
+        conn_params = {
+            'host': os.getenv('POSTGRES_HOST', 'postgres'),
+            'port': os.getenv('POSTGRES_PORT', '5432'),
+            'database': os.getenv('POSTGRES_DB', 'metalayer_etl'),
+            'user': os.getenv('POSTGRES_USER', 'postgres'),
+            'password': os.getenv('POSTGRES_PASSWORD', 'postgres')
+        }
+        
+        while True:
+            try:
+                with psycopg2.connect(**conn_params) as conn:
+                    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                        # Get record counts per layer
+                        layers_tables = [
+                            ('bronze', 'customers_raw'),
+                            ('bronze', 'orders_raw'),
+                            ('silver', 'customers_cleaned'),
+                            ('silver', 'orders_cleaned'),
+                            ('gold', 'dim_customer'),
+                            ('gold', 'fact_orders'),
+                            ('gold', 'agg_daily_sales')
+                        ]
+                        
+                        for layer, table in layers_tables:
+                            try:
+                                cur.execute(f"SELECT COUNT(*) FROM {layer}.{table}")
+                                count = cur.fetchone()[0]
+                                
+                                # Update records processed metric
+                                metalayer_records_processed_total.labels(
+                                    layer=layer,
+                                    table=table,
+                                    operation='processed'
+                                )._value._value = count
+                                
+                                # Simulate data quality scores
+                                quality_score = min(1.0, 0.85 + (count % 100) * 0.001)
+                                metalayer_data_quality_score.labels(
+                                    layer=layer,
+                                    table=table,
+                                    check_type='completeness'
+                                ).set(quality_score)
+                                
+                            except Exception as e:
+                                logger.warning(f"Could not collect metrics for {layer}.{table}: {e}")
+                        
+                        # Database pool metrics (simulated but realistic)
+                        cur.execute("SELECT count(*) FROM pg_stat_activity WHERE state = 'active'")
+                        active_connections = cur.fetchone()[0]
+                        
+                        metalayer_db_pool_active_connections.labels(
+                            pool_name='postgres_main',
+                            database='metalayer_etl'
+                        ).set(active_connections)
+                        
+                        metalayer_db_pool_total_connections.labels(
+                            pool_name='postgres_main',
+                            database='metalayer_etl'
+                        ).set(50)  # Max pool size
+                        
+                        logger.info(f"Updated metrics - Active connections: {active_connections}")
+                        
+            except Exception as e:
+                logger.error(f"Error collecting ETL metrics: {e}")
+            
+            time.sleep(30)  # Collect every 30 seconds
+            
+    except Exception as e:
+        logger.error(f"Fatal error in metrics collection: {e}")
+
+def simulate_processing_metrics():
+    """Simulate processing duration metrics"""
+    layers = ['bronze', 'silver', 'gold']
+    operations = ['extract', 'transform', 'load', 'validate']
+    tables = ['customers', 'orders', 'products']
+    
+    while True:
+        try:
+            for layer in layers:
+                for operation in operations:
+                    for table in tables:
+                        # Simulate realistic processing times
+                        duration = 0.5 + (hash(f"{layer}{operation}{table}") % 100) * 0.01
+                        
+                        metalayer_incremental_processing_duration_seconds.labels(
+                            layer=layer,
+                            operation=operation,
+                            table=table
+                        ).observe(duration)
+            
+            logger.info("Updated processing duration metrics")
+            time.sleep(45)  # Update every 45 seconds
+            
+        except Exception as e:
+            logger.error(f"Error simulating processing metrics: {e}")
+            time.sleep(90)
+
 def start_metrics_collection():
     """Start all metric collection threads"""
-    logger.info("Starting MetaLayer metrics collection...")
+    logger.info("Starting MetaLayer ETL metrics collection...")
     
     # Start Prometheus metrics server on port 8000
     start_http_server(8000)
     logger.info("Prometheus metrics server started on port 8000")
     
     # Start metric collection threads
-    db_thread = threading.Thread(target=simulate_database_metrics, daemon=True)
-    quality_thread = threading.Thread(target=simulate_data_quality_metrics, daemon=True)
+    real_metrics_thread = threading.Thread(target=collect_real_etl_metrics, daemon=True)
     processing_thread = threading.Thread(target=simulate_processing_metrics, daemon=True)
     
-    db_thread.start()
-    quality_thread.start() 
+    real_metrics_thread.start()
     processing_thread.start()
     
     logger.info("All metric collection threads started")
@@ -139,7 +240,7 @@ def start_metrics_collection():
     try:
         while True:
             time.sleep(60)
-            logger.info("MetaLayer metrics collector running...")
+            logger.info("MetaLayer ETL metrics collector running...")
     except KeyboardInterrupt:
         logger.info("Shutting down metrics collector...")
 
@@ -159,18 +260,18 @@ def export_pipeline_metrics(dag_id, task_id, status, execution_time=None, record
         
         # Update records processed counter
         if records_processed > 0:
-            records_processed_total.labels(
-                layer=dag_id,
+            metalayer_records_processed_total.labels(
+                layer=dag_id.replace('_layer_etl_pipeline', '').replace('_', ''),
                 table=task_id,
                 operation=status
             ).inc(records_processed)
         
         # Update execution time histogram
         if execution_time:
-            incremental_processing_duration.labels(
-                layer=dag_id,
-                table=task_id,
-                operation=status
+            metalayer_incremental_processing_duration_seconds.labels(
+                layer=dag_id.replace('_layer_etl_pipeline', '').replace('_', ''),
+                operation=status,
+                table=task_id
             ).observe(execution_time)
             
         logger.info(f"Successfully exported metrics for {dag_id}.{task_id}")

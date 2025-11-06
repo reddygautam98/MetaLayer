@@ -636,19 +636,58 @@ start_task = DummyOperator(
     dag=dag
 )
 
-# Wait for Bronze layer completion
-wait_for_bronze = ExternalTaskSensor(
+# Check Bronze layer data availability 
+def check_bronze_data_available(**context):
+    """
+    Check if there is recent data in Bronze layer tables.
+    This is more flexible than ExternalTaskSensor for manual triggers.
+    """
+    execution_date = context['execution_date']
+    logger.info(f"🔍 Checking Bronze layer data availability for {execution_date}")
+    
+    try:
+        hook = PostgresHook(postgres_conn_id='postgres_default')
+        
+        # Check for recent data in bronze tables (within last 24 hours)
+        check_date = execution_date.date()
+        
+        customers_query = """
+            SELECT COUNT(*) 
+            FROM bronze.customers_raw 
+            WHERE DATE(ingestion_timestamp) >= %s
+        """
+        
+        orders_query = """
+            SELECT COUNT(*) 
+            FROM bronze.orders_raw 
+            WHERE DATE(ingestion_timestamp) >= %s
+        """
+        
+        customers_count = hook.get_first(customers_query, parameters=[check_date])[0]
+        orders_count = hook.get_first(orders_query, parameters=[check_date])[0]
+        
+        logger.info(f"📊 Found {customers_count} customers and {orders_count} orders for date {check_date}")
+        
+        if customers_count > 0 or orders_count > 0:
+            logger.info("✅ Bronze data is available for processing")
+            return True
+        else:
+            raise AirflowException(f"❌ No Bronze data found for {check_date}. Cannot proceed with Silver layer processing.")
+    
+    except Exception as e:
+        logger.error(f"❌ Error checking Bronze data availability: {str(e)}")
+        raise
+
+wait_for_bronze = PythonOperator(
     task_id='wait_for_bronze_completion',
-    external_dag_id='bronze_layer_etl_pipeline',
-    external_task_id='end_bronze_pipeline',
-    timeout=3600,  # 1 hour timeout
-    poke_interval=300,  # Check every 5 minutes
+    python_callable=check_bronze_data_available,
     dag=dag,
     doc_md="""
-    ## Wait for Bronze Layer
+    ## Check Bronze Data Availability
     
-    Waits for the Bronze layer ETL pipeline to complete successfully
-    before starting Silver layer transformations.
+    Verifies that Bronze layer data is available for processing.
+    This approach is more flexible than ExternalTaskSensor for manual triggers
+    and mixed scheduling scenarios.
     """
 )
 

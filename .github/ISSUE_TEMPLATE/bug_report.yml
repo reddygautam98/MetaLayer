@@ -1,0 +1,103 @@
+name: 🐛 Bug Report
+description: Report a bug or unexpected behavior in MetaLayer
+title: "[BUG] "
+labels: ["bug", "triage-needed"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report! 
+        
+        Before submitting, please check if a similar issue already exists.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component is affected?
+      options:
+        - Bronze Layer (Data Ingestion)
+        - Silver Layer (Data Transformation)
+        - Gold Layer (Analytics)
+        - Database (PostgreSQL)
+        - Monitoring (Grafana/Prometheus)
+        - Docker/Deployment
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: MetaLayer Version
+      description: Which version of MetaLayer are you using?
+      placeholder: "v1.0.0 or commit hash"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is
+      placeholder: Describe the issue you're experiencing
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior
+      value: |
+        1. Go to '...'
+        2. Click on '....'
+        3. Scroll down to '....'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error Logs
+      description: Please copy and paste any relevant log output
+      render: shell
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Please provide your environment details
+      value: |
+        - OS: [e.g. Ubuntu 22.04, Windows 11, macOS 13]
+        - Docker Version: [e.g. 24.0.0]
+        - Docker Compose Version: [e.g. 2.20.0]
+        - Python Version: [e.g. 3.11]
+        - Browser: [if applicable]
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context about the problem here

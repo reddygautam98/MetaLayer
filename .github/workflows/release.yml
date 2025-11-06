@@ -1,0 +1,211 @@
+name: MetaLayer Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-release:
+    name: 🏗️ Build & Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/}
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "version_number=${VERSION#v}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          echo "## 🎉 MetaLayer Release ${{ steps.version.outputs.version }}" > RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "### 🚀 What's New" >> RELEASE_NOTES.md
+          
+          # Get commits since last tag
+          if git describe --tags --abbrev=0 HEAD^ >/dev/null 2>&1; then
+            LAST_TAG=$(git describe --tags --abbrev=0 HEAD^)
+            echo "**Changes since ${LAST_TAG}:**" >> RELEASE_NOTES.md
+            echo "" >> RELEASE_NOTES.md
+            git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" >> RELEASE_NOTES.md
+          else
+            echo "- Initial release of MetaLayer ETL Platform" >> RELEASE_NOTES.md
+          fi
+          
+          echo "" >> RELEASE_NOTES.md
+          echo "### 📦 Components" >> RELEASE_NOTES.md
+          echo "- **Airflow DAGs**: Bronze/Silver/Gold layer ETL pipelines" >> RELEASE_NOTES.md
+          echo "- **Database Schemas**: PostgreSQL with medallion architecture" >> RELEASE_NOTES.md
+          echo "- **Monitoring Stack**: Grafana + Prometheus + Custom metrics" >> RELEASE_NOTES.md
+          echo "- **Security**: Environment-based configuration" >> RELEASE_NOTES.md
+          echo "- **Docker Compose**: Multi-environment deployment files" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "### 🔧 Installation" >> RELEASE_NOTES.md
+          echo "\`\`\`bash" >> RELEASE_NOTES.md
+          echo "# Download release" >> RELEASE_NOTES.md
+          echo "wget https://github.com/${{ github.repository }}/archive/${{ steps.version.outputs.version }}.tar.gz" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "# Extract and setup" >> RELEASE_NOTES.md
+          echo "tar -xzf ${{ steps.version.outputs.version }}.tar.gz" >> RELEASE_NOTES.md
+          echo "cd MetaLayer-${{ steps.version.outputs.version_number }}" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "# Configure environment" >> RELEASE_NOTES.md
+          echo "cp .env.template .env" >> RELEASE_NOTES.md
+          echo "# Edit .env with your settings" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "# Start the platform" >> RELEASE_NOTES.md
+          echo "docker-compose -f docker-compose-production.yml up -d" >> RELEASE_NOTES.md
+          echo "\`\`\`" >> RELEASE_NOTES.md
+
+      - name: Build multi-platform Docker images
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          labels: |
+            org.opencontainers.image.title=MetaLayer ETL Platform
+            org.opencontainers.image.description=Production-ready ETL platform with Airflow, PostgreSQL, and monitoring
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ steps.date.outputs.date }}
+
+      - name: Create release package
+        run: |
+          mkdir -p release-package
+          
+          # Copy essential files
+          cp -r dags/ release-package/
+          cp -r include/ release-package/
+          cp -r config/ release-package/
+          cp -r scripts/ release-package/
+          cp docker-compose*.yml release-package/
+          cp Dockerfile release-package/
+          cp requirements.txt release-package/
+          cp packages.txt release-package/
+          cp .env.template release-package/
+          cp *.md release-package/
+          
+          # Create deployment scripts
+          cat > release-package/quick-start.sh << 'EOF'
+          #!/bin/bash
+          set -e
+          
+          echo "🚀 MetaLayer Quick Start"
+          echo "======================="
+          
+          # Check prerequisites
+          if ! command -v docker &> /dev/null; then
+            echo "❌ Docker is required but not installed."
+            exit 1
+          fi
+          
+          if ! command -v docker-compose &> /dev/null; then
+            echo "❌ Docker Compose is required but not installed."
+            exit 1
+          fi
+          
+          # Setup environment
+          if [ ! -f .env ]; then
+            echo "📝 Creating environment file..."
+            cp .env.template .env
+            echo "⚠️  Please edit .env file with your settings before starting!"
+            echo "   Minimum required: Update passwords and email settings"
+          fi
+          
+          # Start the platform
+          echo "🏗️  Starting MetaLayer platform..."
+          docker-compose -f docker-compose-production.yml up -d
+          
+          echo ""
+          echo "✅ MetaLayer is starting up!"
+          echo ""
+          echo "🔗 Access URLs:"
+          echo "   Airflow UI: http://localhost:8080"
+          echo "   Grafana:    http://localhost:3000"
+          echo "   Metrics:    http://localhost:8000"
+          echo ""
+          echo "📖 Default credentials:"
+          echo "   Airflow: admin/admin"
+          echo "   Grafana: admin/admin"
+          echo ""
+          echo "⏳ Please wait 2-3 minutes for all services to start completely."
+          EOF
+          
+          chmod +x release-package/quick-start.sh
+          
+          # Create archive
+          tar -czf metalayer-${{ steps.version.outputs.version }}.tar.gz -C release-package .
+          zip -r metalayer-${{ steps.version.outputs.version }}.zip release-package/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: MetaLayer ${{ steps.version.outputs.version }}
+          body_path: RELEASE_NOTES.md
+          files: |
+            metalayer-${{ steps.version.outputs.version }}.tar.gz
+            metalayer-${{ steps.version.outputs.version }}.zip
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'rc') }}
+
+      - name: Update Docker Hub description
+        uses: peter-evans/dockerhub-description@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+          repository: ${{ github.repository_owner }}/metalayer
+          short-description: Production-ready ETL platform with Airflow, PostgreSQL, and monitoring
+          readme-filepath: ./README.md
+        continue-on-error: true
+
+      - name: Post-release notification
+        run: |
+          echo "🎉 Release ${{ steps.version.outputs.version }} completed successfully!"
+          echo ""
+          echo "📦 Artifacts created:"
+          echo "  - Docker images (multi-platform)"
+          echo "  - Release packages (.tar.gz, .zip)"
+          echo "  - GitHub release with changelog"
+          echo ""
+          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.version }}"

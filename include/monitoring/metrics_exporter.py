@@ -66,9 +66,9 @@ class MetaLayerMetricsCollector:
         return {
             'host': os.getenv('POSTGRES_HOST', 'postgres'),
             'port': int(os.getenv('POSTGRES_PORT', 5432)),
-            'database': os.getenv('POSTGRES_DB', 'metalayer'),
-            'user': os.getenv('POSTGRES_USER', 'metalayer'),
-            'password': os.getenv('POSTGRES_PASSWORD', 'metalayer123')
+            'database': os.getenv('POSTGRES_DB', 'airflow'),
+            'user': os.getenv('POSTGRES_USER', 'airflow'),
+            'password': os.getenv('POSTGRES_PASSWORD', 'airflow_password')
         }
     
     def _setup_pipeline_info(self):

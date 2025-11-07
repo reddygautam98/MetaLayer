@@ -266,8 +266,8 @@ class TestDataProfiling:
                         null_percentage = (null_count / total_records) * 100
 
                         assert (
-                            null_percentage <= null_threshold), f"Column {column} in {table} has {
-                            null_percentage:.2f}% null values (threshold: {null_threshold}%)"
+                            null_percentage <= null_threshold
+                        ), f"Column {column} in {table} has {null_percentage:.2f}% null values (threshold: {null_threshold}%)"
 
             except psycopg2.Error:
                 pytest.skip(f"Table {table} does not exist")

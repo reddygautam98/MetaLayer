@@ -46,6 +46,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install apache-airflow[postgres,celery]==2.8.1
+          pip install "Flask-Session>=0.4.0"
           pip install -r requirements.txt
           pip install pytest pytest-benchmark locust
 

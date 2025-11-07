@@ -15,6 +15,7 @@ SQLAlchemy==1.4.48                 # Database ORM
 apache-airflow-providers-postgres==5.7.1    # PostgreSQL provider
 psycopg2-binary==2.9.7             # PostgreSQL adapter
 apache-airflow-providers-common-sql==1.10.0 # SQL operations
+Flask-Session>=0.4.0               # Session management for Airflow web interface
 
 # =====================================================
 # UTILITIES & MONITORING (LIGHTWEIGHT)

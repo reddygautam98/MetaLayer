@@ -39,28 +39,47 @@ jobs:
         python-version: ${{ env.PYTHON_VERSION }}
         cache: 'pip'
         
-    - name: 📦 Install Dependencies
+    - name: 📦 Install Dependencies (isolated security tools)
       run: |
         python -m pip install --upgrade pip
-        # Install security tools with compatible versions
-        pip install -r requirements-security.txt
+        # Create a venv for project deps (optional)
+        python -m venv .venv
+        source .venv/bin/activate
         pip install -r requirements.txt
+        deactivate
+
+        # Create a separate venv for security tools so they don't conflict
+        python -m venv .venv-security
+        source .venv-security/bin/activate
+        pip install --upgrade pip
+        pip install -r requirements-security.txt
+
+        # Print versions to help debugging in CI logs
+        python --version || true
+        pip --version || true
+        echo "Security tools versions:"
+        safety --version || true
+        bandit --version || true
+        semgrep --version || true
         
     - name: 🔍 Safety Check (Known Vulnerabilities)
       run: |
         echo "Scanning for known security vulnerabilities..."
+        source .venv-security/bin/activate
         safety check --json > safety-report.json || true
         safety check --short-report
         
     - name: 🛡️ Bandit Security Analysis
       run: |
         echo "Running Bandit security analysis..."
+        source .venv-security/bin/activate
         bandit -r dags/ include/ -f json -o bandit-report.json || true
         bandit -r dags/ include/ -ll -i
         
     - name: 🔎 Semgrep Static Analysis
       run: |
         echo "Running Semgrep static analysis..."
+        source .venv-security/bin/activate
         semgrep --config=auto dags/ include/ --json --output=semgrep-report.json || true
         semgrep --config=auto dags/ include/ --severity=ERROR
         

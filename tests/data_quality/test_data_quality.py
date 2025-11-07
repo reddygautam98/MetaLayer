@@ -72,7 +72,7 @@ class TestDataQuality:
             cursor.execute(
                 """
                 SELECT COUNT(*) FROM silver.sales_cleaned 
-                WHERE sale_amount <= 0 OR quantity <= 0
+                WHERE sale_amount_clean <= 0 OR quantity_clean <= 0
             """
             )
             invalid_sales = cursor.fetchone()[0]
@@ -199,7 +199,7 @@ class TestDataQuality:
             cursor.execute(
                 """
                 SELECT COUNT(*) FROM silver.sales_cleaned
-                WHERE sale_amount > 100000  -- Unusually large sales
+                WHERE sale_amount_clean > 100000  -- Unusually large sales
             """
             )
             large_sales = cursor.fetchone()[0]

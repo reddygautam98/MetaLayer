@@ -183,7 +183,7 @@ jobs:
     - name: 🔍 Linting (Flake8)
       run: |
         echo "Running Flake8 linting..."
-        flake8 dags/ include/ tests/ --count --statistics --max-line-length=127 --extend-ignore=E203,W503
+        flake8 dags/ include/ tests/ --count --statistics
         
     - name: 📈 Type Checking (MyPy)
       run: |

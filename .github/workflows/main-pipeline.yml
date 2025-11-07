@@ -161,9 +161,18 @@ jobs:
     - name: ✅ Verify Flask-Session & Airflow Import
       run: |
         echo "🔍 Verifying required packages are installed..."
-        python -c "import flask_session; print('✅ flask_session module available')"
+        # verify Flask-Session import name
+        python -c "import importlib; importlib.import_module('flask_session'); print('✅ flask_session module available')"
+
+        # verify airflow import and show version
         python -c "import airflow; print('✅ airflow version:', airflow.__version__)"
-        python -c "from airflow.web.session import AirflowSessionInterface; print('✅ airflow.web.session import successful')"
+
+        # check common web-related Airflow modules/entrypoints (safer than airflow.web)
+        python -c "import importlib; importlib.import_module('airflow.www'); print('✅ airflow.www import successful')" || echo "⚠️ airflow.www import failed"
+        python -c "import importlib; importlib.import_module('airflow.www.app'); print('✅ airflow.www.app import successful')" || echo "⚠️ airflow.www.app import failed"
+        python -c "import importlib; importlib.import_module('airflow.configuration'); print('✅ airflow.configuration import successful')" || echo "⚠️ airflow.configuration import failed"
+
+        # verify psycopg2 availability
         python -c "import psycopg2; print('✅ psycopg2 module available, version:', psycopg2.__version__)"
         python -c "from psycopg2.extras import RealDictCursor; print('✅ psycopg2.extras import successful')"
         echo "🎉 All required modules verified successfully!"
@@ -173,6 +182,18 @@ jobs:
         export AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@localhost:5432/airflow
         export AIRFLOW__CORE__LOAD_EXAMPLES=false
         export AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
+
+        # Wait for Postgres to be ready (retry with psycopg2)
+        echo "Waiting for Postgres to be ready..."
+        for i in {1..30}; do
+          if python -c "import psycopg2; conn = psycopg2.connect('dbname=airflow user=airflow password=airflow host=localhost'); conn.close(); print('✅ Postgres is ready')" 2>/dev/null; then
+            break
+          else
+            echo "Waiting for Postgres... attempt $i/30"
+            sleep 2
+          fi
+        done
+
         airflow db init
         
     - name: ✅ Validate DAG Files

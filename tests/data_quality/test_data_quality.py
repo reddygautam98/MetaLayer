@@ -185,8 +185,8 @@ class TestDataQuality:
 
                 duplicate = cursor.fetchone()
                 assert (
-                    duplicate is None), f"Found duplicate {key_column} in {table}: {
-                    duplicate[0] if duplicate else 'None'}"
+                    duplicate is None
+                ), f"Found duplicate {key_column} in {table}: {duplicate[0] if duplicate else 'None'}"
 
             except psycopg2.Error:
                 pytest.skip(f"Table {table} does not exist")

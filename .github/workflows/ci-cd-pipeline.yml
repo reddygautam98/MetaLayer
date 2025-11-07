@@ -64,7 +64,7 @@ jobs:
 
       - name: 🎨 Code Formatting Check (Black)
         run: |
-          black --check --diff dags/ plugins/ tests/ || exit 1
+          black --check --diff --exclude "\.venv|__pycache__|\.git|node_modules" dags/ include/ tests/ || exit 1
 
       - name: 📋 Import Sorting Check (isort)
         run: |

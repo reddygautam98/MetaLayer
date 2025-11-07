@@ -139,8 +139,8 @@ jobs:
     - name: 🎨 Code Formatting (Black)
       run: |
         echo "Checking code formatting..."
-        black --check --diff dags/ include/ tests/ || {
-          echo "❌ Code formatting issues found. Run 'black dags/ include/ tests/' to fix."
+        black --check --diff --exclude "\.venv|__pycache__|\.git|node_modules" dags/ include/ tests/ || {
+          echo "❌ Code formatting issues found. Run 'black --exclude \"\.venv|__pycache__|\.git|node_modules\" dags/ include/ tests/' to fix."
           exit 1
         }
         echo "✅ Code formatting is correct"

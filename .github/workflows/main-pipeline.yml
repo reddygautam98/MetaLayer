@@ -70,7 +70,7 @@ jobs:
     - name: 🎨 Code Formatting Check
       run: |
         echo "Checking code formatting with Black..."
-        black --check --diff dags/ include/ tests/
+        black --check --diff --exclude "\.venv|__pycache__|\.git|node_modules" dags/ include/ tests/
         
     - name: 📏 Import Sorting Check
       run: |

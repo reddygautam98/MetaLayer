@@ -63,7 +63,7 @@ jobs:
       - name: Run Black (Code Formatting)
         run: |
           echo "🎨 Checking code formatting with Black..."
-          black --check --diff dags/ include/ --line-length=88
+          black --check --diff --exclude "\.venv|__pycache__|\.git" dags/ include/ tests/ --line-length=88
 
       - name: Run isort (Import Sorting)
         run: |

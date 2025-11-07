@@ -14,6 +14,7 @@ from datetime import datetime
 _psycopg2 = None
 _RealDictCursor = None
 
+
 def _get_psycopg2_imports():
     """Lazy import psycopg2 modules only when needed."""
     global _psycopg2, _RealDictCursor
@@ -21,11 +22,13 @@ def _get_psycopg2_imports():
         try:
             import psycopg2
             from psycopg2.extras import RealDictCursor
+
             _psycopg2 = psycopg2
             _RealDictCursor = RealDictCursor
         except ImportError as e:
             raise RuntimeError(f"psycopg2 is required for database operations: {e}")
     return _psycopg2, _RealDictCursor
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

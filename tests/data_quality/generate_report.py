@@ -122,24 +122,30 @@ class DataQualityReportGenerator:
         issues = []
         cursor = conn.cursor()
 
-        quality_checks = [{"name": "Bronze Layer - Null Sales Amount",
-                           "query": "SELECT COUNT(*) FROM bronze.erp_sales_raw WHERE sale_amount IS NULL",
-                           "table": "bronze.erp_sales_raw",
-                           },
-                          {"name": "Bronze Layer - Invalid Sales Amount",
-                           "query": "SELECT COUNT(*) FROM bronze.erp_sales_raw WHERE sale_amount <= 0",
-                           "table": "bronze.erp_sales_raw",
-                           },
-                          {"name": "Silver Layer - Null Cleaned Amount",
-                           "query": "SELECT COUNT(*) FROM silver.sales_cleaned WHERE sale_amount_clean IS NULL",
-                           "table": "silver.sales_cleaned",
-                           },
-                          {"name": "Silver Layer - Invalid Cleaned Amount",
-                           "query": "SELECT COUNT(*) FROM silver.sales_cleaned WHERE sale_amount_clean <= 0",
-                           "table": "silver.sales_cleaned",
-                           },
-                          {"name": "Silver Layer - Duplicate Sales IDs",
-                           "query": """
+        quality_checks = [
+            {
+                "name": "Bronze Layer - Null Sales Amount",
+                "query": "SELECT COUNT(*) FROM bronze.erp_sales_raw WHERE sale_amount IS NULL",
+                "table": "bronze.erp_sales_raw",
+            },
+            {
+                "name": "Bronze Layer - Invalid Sales Amount",
+                "query": "SELECT COUNT(*) FROM bronze.erp_sales_raw WHERE sale_amount <= 0",
+                "table": "bronze.erp_sales_raw",
+            },
+            {
+                "name": "Silver Layer - Null Cleaned Amount",
+                "query": "SELECT COUNT(*) FROM silver.sales_cleaned WHERE sale_amount_clean IS NULL",
+                "table": "silver.sales_cleaned",
+            },
+            {
+                "name": "Silver Layer - Invalid Cleaned Amount",
+                "query": "SELECT COUNT(*) FROM silver.sales_cleaned WHERE sale_amount_clean <= 0",
+                "table": "silver.sales_cleaned",
+            },
+            {
+                "name": "Silver Layer - Duplicate Sales IDs",
+                "query": """
                     SELECT COUNT(*) FROM (
                         SELECT sales_id, COUNT(*)
                         FROM silver.sales_cleaned
@@ -147,9 +153,9 @@ class DataQualityReportGenerator:
                         HAVING COUNT(*) > 1
                     ) duplicates
                 """,
-                           "table": "silver.sales_cleaned",
-                           },
-                          ]
+                "table": "silver.sales_cleaned",
+            },
+        ]
 
         for check in quality_checks:
             try:

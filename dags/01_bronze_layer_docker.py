@@ -468,8 +468,7 @@ def validate_bronze_layer(**context) -> Dict[str, Any]:
         }
 
         logger.info(
-            f"✅ Bronze layer validation completed: Quality Score = {
-                overall_quality_score:.2%}"
+            f"✅ Bronze layer validation completed: Quality Score = {overall_quality_score:.2%}"
         )
 
         if issues_found:

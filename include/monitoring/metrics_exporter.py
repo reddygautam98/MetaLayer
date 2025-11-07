@@ -5,12 +5,27 @@ This module exports custom metrics for the MetaLayer data pipeline.
 
 import time
 import logging
-import psycopg2
-from psycopg2.extras import RealDictCursor
 from prometheus_client import start_http_server, Gauge, Counter, Histogram, Info
 import threading
 import os
 from datetime import datetime
+
+# Lazy import for optional dependencies - only imported when needed
+_psycopg2 = None
+_RealDictCursor = None
+
+def _get_psycopg2_imports():
+    """Lazy import psycopg2 modules only when needed."""
+    global _psycopg2, _RealDictCursor
+    if _psycopg2 is None:
+        try:
+            import psycopg2
+            from psycopg2.extras import RealDictCursor
+            _psycopg2 = psycopg2
+            _RealDictCursor = RealDictCursor
+        except ImportError as e:
+            raise RuntimeError(f"psycopg2 is required for database operations: {e}")
+    return _psycopg2, _RealDictCursor
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -85,6 +100,7 @@ class MetaLayerMetricsCollector:
     def _get_db_connection(self):
         """Get a database connection."""
         try:
+            psycopg2, _ = _get_psycopg2_imports()
             conn = psycopg2.connect(**self.db_config)
             return conn
         except Exception as e:
@@ -98,7 +114,8 @@ class MetaLayerMetricsCollector:
             if not conn:
                 return
 
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            _, real_dict_cursor = _get_psycopg2_imports()
+            with conn.cursor(cursor_factory=real_dict_cursor) as cur:
                 # Get active connections
                 cur.execute(
                     """
@@ -142,7 +159,8 @@ class MetaLayerMetricsCollector:
             if not conn:
                 return
 
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            _, real_dict_cursor = _get_psycopg2_imports()
+            with conn.cursor(cursor_factory=real_dict_cursor) as cur:
                 # Check each layer for basic data quality
                 layers = ["bronze", "silver", "gold"]
 

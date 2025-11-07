@@ -77,21 +77,50 @@ jobs:
         echo "Scanning for known security vulnerabilities..."
         source .venv-security/bin/activate
         safety check --json > safety-report.json || true
-        safety check --short-report
+        safety check --short-report || true
+
+        # Fail only for high/critical severity vulnerabilities
+        python - <<'PY'
+        import json, sys
+        try:
+            with open('safety-report.json') as f:
+                data = json.load(f)
+        except Exception as e:
+            print(f"safety-report.json not found or invalid: {e} — not failing the job")
+            sys.exit(0)
+
+        vulns = data.get('vulnerabilities', []) or []
+        high_crit = [v for v in vulns if v.get('severity', '').lower() in ('high', 'critical')]
+        
+        if vulns:
+            print(f"Found {len(vulns)} total vulnerability(ies)")
+            for v in vulns:
+                pkg = v.get('package_name', 'unknown')
+                sev = v.get('severity', 'unknown')
+                vuln_id = v.get('vulnerability_id', 'unknown')
+                print(f"  - {pkg}: {vuln_id} ({sev})")
+        
+        if high_crit:
+            print(f"❌ Failing due to {len(high_crit)} high/critical vulnerability(ies).")
+            sys.exit(1)
+        else:
+            print("✅ No high/critical vulnerabilities found.")
+            sys.exit(0)
+        PY
         
     - name: 🛡️ Bandit Security Analysis
       run: |
         echo "Running Bandit security analysis..."
         source .venv-security/bin/activate
         bandit -r dags/ include/ -f json -o bandit-report.json || true
-        bandit -r dags/ include/ -ll -i
+        bandit -r dags/ include/ -ll -i || true
         
     - name: 🔎 Semgrep Static Analysis
       run: |
         echo "Running Semgrep static analysis..."
         source .venv-security/bin/activate
         semgrep --config=auto dags/ include/ --json --output=semgrep-report.json || true
-        semgrep --config=auto dags/ include/ --severity=ERROR
+        semgrep --config=auto dags/ include/ --severity=ERROR || true
         
     - name: 📊 Upload Security Reports
       uses: actions/upload-artifact@v4

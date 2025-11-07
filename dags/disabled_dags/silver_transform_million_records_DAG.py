@@ -26,7 +26,7 @@ def validate_silver_processing():
         "SELECT COUNT(*) FROM silver.customers_standardized"
     )[0]
 
-    print(f"📊 Silver Layer Validation:")
+    print("📊 Silver Layer Validation:")
     print(f"   Sales Cleaned: {sales_count:,} records")
     print(f"   Customers Standardized: {customers_count:,} records")
 

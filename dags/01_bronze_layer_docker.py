@@ -524,7 +524,7 @@ def log_pipeline_completion(**context) -> None:
             "pipeline_status": "SUCCESS",
         }
 
-        logger.info(f"🎉 Bronze layer pipeline completed successfully!")
+        logger.info("🎉 Bronze layer pipeline completed successfully!")
         logger.info(f"📊 Summary metrics: {summary_metrics}")
 
         # Store summary metrics in database

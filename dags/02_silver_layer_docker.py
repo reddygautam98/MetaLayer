@@ -169,7 +169,7 @@ def transform_customers_bronze_to_silver(**context) -> Dict[str, Any]:
     try:
         # Get database connection
         hook = PostgresHook(postgres_conn_id="postgres_default")
-        processor = IncrementalProcessor(hook)
+        # processor = IncrementalProcessor(hook)  # Future use for incremental processing
 
         # Initialize metrics
         metrics = {

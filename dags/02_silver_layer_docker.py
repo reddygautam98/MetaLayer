@@ -318,9 +318,7 @@ def transform_customers_bronze_to_silver(**context) -> Dict[str, Any]:
         # Validate quality threshold
         if metrics["data_quality_score"] < QUALITY_THRESHOLD:
             logger.warning(
-                f"⚠️ Quality score {
-                    metrics['data_quality_score']:.2%} below threshold {
-                    QUALITY_THRESHOLD:.2%}"
+                f"⚠️ Quality score {metrics['data_quality_score']:.2%} below threshold {QUALITY_THRESHOLD:.2%}"
             )
 
         return metrics
@@ -606,8 +604,7 @@ def validate_silver_layer_quality(**context) -> Dict[str, Any]:
                 )
 
         logger.info(
-            f"✅ Silver layer validation completed: Quality Score = {
-                validation_results['overall_quality_score']:.2%}"
+            f"✅ Silver layer validation completed: Quality Score = {validation_results['overall_quality_score']:.2%}"
         )
 
         if validation_results["critical_issues"]:

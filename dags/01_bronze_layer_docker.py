@@ -300,8 +300,8 @@ def ingest_crm_data(**context) -> Dict[str, Any]:
         # Validate quality threshold
         if metrics["data_quality_score"] < QUALITY_THRESHOLD:
             raise DataQualityError(
-                f"Data quality score {
-                    metrics['data_quality_score']} below threshold {QUALITY_THRESHOLD}")
+                f"Data quality score {metrics['data_quality_score']} below threshold {QUALITY_THRESHOLD}"
+            )
 
         return metrics
 
@@ -415,8 +415,8 @@ def ingest_erp_data(**context) -> Dict[str, Any]:
         # Validate quality threshold
         if metrics["data_quality_score"] < QUALITY_THRESHOLD:
             raise DataQualityError(
-                f"Data quality score {
-                    metrics['data_quality_score']} below threshold {QUALITY_THRESHOLD}")
+                f"Data quality score {metrics['data_quality_score']} below threshold {QUALITY_THRESHOLD}"
+            )
 
         return metrics
 
@@ -454,13 +454,15 @@ def validate_bronze_layer(**context) -> Dict[str, Any]:
                 f"Customers table: {
                     customers_validation.get(
                         'error',
-                        'Quality checks failed')}")
+                        'Quality checks failed')}"
+            )
         if orders_validation.get("overall_status") != "PASSED":
             issues_found.append(
                 f"Orders table: {
                     orders_validation.get(
                         'error',
-                        'Quality checks failed')}")
+                        'Quality checks failed')}"
+            )
 
         validation_results = {
             "customers_validation": customers_validation,
@@ -472,7 +474,8 @@ def validate_bronze_layer(**context) -> Dict[str, Any]:
 
         logger.info(
             f"✅ Bronze layer validation completed: Quality Score = {
-                overall_quality_score:.2%}")
+                overall_quality_score:.2%}"
+        )
 
         if issues_found:
             logger.warning(f"⚠️ Issues found: {issues_found}")

@@ -237,7 +237,7 @@ class OptimizedConnectionPool:
                 with conn.cursor() as cursor:
                     # Process in batches to avoid memory issues
                     for i in range(0, len(parameter_list), batch_size):
-                        batch = parameter_list[i: i + batch_size]
+                        batch = parameter_list[i : i + batch_size]
                         extras.execute_batch(cursor, query, batch)
                         total_affected += cursor.rowcount
 
@@ -300,8 +300,8 @@ class OptimizedConnectionPool:
 
                     if status["failed_connections"] > 10:
                         logger.warning(
-                            f"High connection failure rate: {
-                                status['failed_connections']}")
+                            f"High connection failure rate: {status['failed_connections']}"
+                        )
 
                     time.sleep(self.config.health_check_interval)
 

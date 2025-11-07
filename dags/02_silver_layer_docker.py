@@ -295,8 +295,8 @@ def transform_customers_bronze_to_silver(**context) -> Dict[str, Any]:
 
                     if metrics["transformation_errors"] > 10:  # Max allowed errors
                         raise DataTransformationError(
-                            f"Too many transformation errors: {
-                                metrics['transformation_errors']}")
+                            f"Too many transformation errors: {metrics['transformation_errors']}"
+                        )
 
         # Calculate final metrics
         end_time = datetime.now()
@@ -319,7 +319,8 @@ def transform_customers_bronze_to_silver(**context) -> Dict[str, Any]:
             logger.warning(
                 f"⚠️ Quality score {
                     metrics['data_quality_score']:.2%} below threshold {
-                    QUALITY_THRESHOLD:.2%}")
+                    QUALITY_THRESHOLD:.2%}"
+            )
 
         return metrics
 
@@ -461,7 +462,8 @@ def transform_orders_bronze_to_silver(**context) -> Dict[str, Any]:
                     if metrics["transformation_errors"] > 10:
                         raise DataTransformationError(
                             f"Too many transformation errors: {
-                                metrics['transformation_errors']}")
+                                metrics['transformation_errors']}"
+                        )
 
         # Calculate final metrics
         end_time = datetime.now()
@@ -503,52 +505,60 @@ def validate_silver_layer_quality(**context) -> Dict[str, Any]:
         }
 
         # Customer quality checks
-        customer_checks = [{"name": "customer_record_count",
-                            "query": "SELECT COUNT(*) FROM silver.customers_cleaned WHERE DATE(processed_timestamp) = %s",
-                            "params": [execution_date.date()],
-                            "expected_min": 1,
-                            },
-                           {"name": "customer_quality_score_avg",
-                            "query": "SELECT AVG(data_quality_score) FROM silver.customers_cleaned WHERE DATE(processed_timestamp) = %s",
-                            "params": [execution_date.date()],
-                            "expected_min": 0.7,
-                            },
-                           {"name": "active_customer_percentage",
-                            "query": """
+        customer_checks = [
+            {
+                "name": "customer_record_count",
+                "query": "SELECT COUNT(*) FROM silver.customers_cleaned WHERE DATE(processed_timestamp) = %s",
+                "params": [execution_date.date()],
+                "expected_min": 1,
+            },
+            {
+                "name": "customer_quality_score_avg",
+                "query": "SELECT AVG(data_quality_score) FROM silver.customers_cleaned WHERE DATE(processed_timestamp) = %s",
+                "params": [execution_date.date()],
+                "expected_min": 0.7,
+            },
+            {
+                "name": "active_customer_percentage",
+                "query": """
                     SELECT (COUNT(*) FILTER (WHERE is_active = true)::float / COUNT(*)) * 100
                     FROM silver.customers_cleaned
                     WHERE DATE(processed_timestamp) = %s
                 """,
-                            "params": [execution_date.date()],
-                            "expected_min": 60.0,
-                            },
-                           ]
+                "params": [execution_date.date()],
+                "expected_min": 60.0,
+            },
+        ]
 
         validation_results["customer_quality_checks"] = validator.run_validation_checks(
             customer_checks
         )
 
         # Order quality checks
-        order_checks = [{"name": "order_record_count",
-                         "query": "SELECT COUNT(*) FROM silver.orders_cleaned WHERE DATE(processed_timestamp) = %s",
-                         "params": [execution_date.date()],
-                         "expected_min": 1,
-                         },
-                        {"name": "valid_order_percentage",
-                         "query": """
+        order_checks = [
+            {
+                "name": "order_record_count",
+                "query": "SELECT COUNT(*) FROM silver.orders_cleaned WHERE DATE(processed_timestamp) = %s",
+                "params": [execution_date.date()],
+                "expected_min": 1,
+            },
+            {
+                "name": "valid_order_percentage",
+                "query": """
                     SELECT (COUNT(*) FILTER (WHERE is_valid = true)::float / COUNT(*)) * 100
                     FROM silver.orders_cleaned
                     WHERE DATE(processed_timestamp) = %s
                 """,
-                         "params": [execution_date.date()],
-                         "expected_min": 75.0,
-                         },
-                        {"name": "average_order_value",
-                         "query": "SELECT AVG(total_amount) FROM silver.orders_cleaned WHERE is_valid = true AND DATE(processed_timestamp) = %s",
-                         "params": [execution_date.date()],
-                         "expected_min": 10.0,
-                         },
-                        ]
+                "params": [execution_date.date()],
+                "expected_min": 75.0,
+            },
+            {
+                "name": "average_order_value",
+                "query": "SELECT AVG(total_amount) FROM silver.orders_cleaned WHERE is_valid = true AND DATE(processed_timestamp) = %s",
+                "params": [execution_date.date()],
+                "expected_min": 10.0,
+            },
+        ]
 
         validation_results["order_quality_checks"] = validator.run_validation_checks(
             order_checks
@@ -596,7 +606,8 @@ def validate_silver_layer_quality(**context) -> Dict[str, Any]:
 
         logger.info(
             f"✅ Silver layer validation completed: Quality Score = {
-                validation_results['overall_quality_score']:.2%}")
+                validation_results['overall_quality_score']:.2%}"
+        )
 
         if validation_results["critical_issues"]:
             logger.warning(
@@ -772,14 +783,16 @@ def check_bronze_data_available(**context):
         orders_count = hook.get_first(orders_query, parameters=[check_date])[0]
 
         logger.info(
-            f"📊 Found {customers_count} customers and {orders_count} orders for date {check_date}")
+            f"📊 Found {customers_count} customers and {orders_count} orders for date {check_date}"
+        )
 
         if customers_count > 0 or orders_count > 0:
             logger.info("✅ Bronze data is available for processing")
             return True
         else:
             raise AirflowException(
-                f"❌ No Bronze data found for {check_date}. Cannot proceed with Silver layer processing.")
+                f"❌ No Bronze data found for {check_date}. Cannot proceed with Silver layer processing."
+            )
 
     except Exception as e:
         logger.error(f"❌ Error checking Bronze data availability: {str(e)}")

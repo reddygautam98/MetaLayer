@@ -273,11 +273,9 @@ def check_system_prerequisites(
                 )
 
     logger.info(
-        f"✅ Prerequisites check completed: {
-            len(
-                prerequisites['passed_checks'])} passed, {
-            len(
-                prerequisites['failed_checks'])} failed")
+        f"✅ Prerequisites check completed: {len(prerequisites['passed_checks'])} passed, "
+        f"{len(prerequisites['failed_checks'])} failed"
+    )
 
     return prerequisites
 
@@ -526,12 +524,14 @@ def finalize_pipeline_run(**context) -> Dict[str, Any]:
             logger.warning(
                 f"⚠️ SLA missed: {
                     total_duration /
-                    60:.1f} minutes (SLA: {SLA_MINUTES} minutes)")
+                    60:.1f} minutes (SLA: {SLA_MINUTES} minutes)"
+            )
 
         if final_summary["overall_quality_score"] < 0.8:
             logger.warning(
                 f"⚠️ Quality score below threshold: {
-                    final_summary['overall_quality_score']:.2%}")
+                    final_summary['overall_quality_score']:.2%}"
+            )
 
         # Export final metrics
         export_pipeline_metrics("master_finalization", final_summary, execution_date)
@@ -546,8 +546,9 @@ def finalize_pipeline_run(**context) -> Dict[str, Any]:
             with hook.get_conn() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "UPDATE airflow_meta.pipeline_runs SET status = %s, end_time = %s WHERE dag_id = %s AND execution_date = %s", [
-                        "FAILED", datetime.now(), DAG_ID, execution_date], )
+                    "UPDATE airflow_meta.pipeline_runs SET status = %s, end_time = %s WHERE dag_id = %s AND execution_date = %s",
+                    ["FAILED", datetime.now(), DAG_ID, execution_date],
+                )
                 conn.commit()
         except Exception as update_error:
             logger.error(f"❌ Failed to update status: {str(update_error)}")

@@ -35,7 +35,8 @@ def validate_silver_processing():
     else:
         print("❌ Silver layer validation FAILED!")
         raise ValueError(
-            f"Expected 1M+ records, got Sales: {sales_count}, Customers: {customers_count}")
+            f"Expected 1M+ records, got Sales: {sales_count}, Customers: {customers_count}"
+        )
 
 
 dag = DAG(

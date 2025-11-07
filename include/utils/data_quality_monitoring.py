@@ -340,7 +340,8 @@ class DataQualityMonitor:
             }
 
             logger.info(
-                f"Created expectation suite for {schema_name}.{table_name}: {suite_info}")
+                f"Created expectation suite for {schema_name}.{table_name}: {suite_info}"
+            )
             return suite_info
 
         except Exception as e:
@@ -509,21 +510,24 @@ class DataQualityMonitor:
             full_table_name = f"{schema_name}.{table_name}"
 
             # Basic checks
-            checks = [("row_count",
-                       f"SELECT COUNT(*) FROM {full_table_name}",
-                       lambda x: x > 0,
-                       ),
-                      ("null_check",
-                       f"SELECT COUNT(*) FROM {full_table_name} WHERE {self._get_primary_key(schema_name,
-                                                                                             table_name)} IS NULL",
-                       lambda x: x == 0,
-                       ),
-                      ("duplicate_check",
-                       f"SELECT COUNT(*) - COUNT(DISTINCT {self._get_primary_key(schema_name,
-                                                                                 table_name)}) FROM {full_table_name}",
-                       lambda x: x == 0,
-                       ),
-                      ]
+            primary_key = self._get_primary_key(schema_name, table_name)
+            checks = [
+                (
+                    "row_count",
+                    f"SELECT COUNT(*) FROM {full_table_name}",
+                    lambda x: x > 0,
+                ),
+                (
+                    "null_check",
+                    f"SELECT COUNT(*) FROM {full_table_name} WHERE {primary_key} IS NULL",
+                    lambda x: x == 0,
+                ),
+                (
+                    "duplicate_check",
+                    f"SELECT COUNT(*) - COUNT(DISTINCT {primary_key}) FROM {full_table_name}",
+                    lambda x: x == 0,
+                ),
+            ]
 
             successful = 0
             total = len(checks)

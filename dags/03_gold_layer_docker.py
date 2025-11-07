@@ -617,8 +617,8 @@ def validate_gold_layer_quality(**context) -> Dict[str, Any]:
         )
 
         logger.info(
-            f"✅ Gold layer validation completed: Quality Score = {
-                validation_results['overall_quality_score']:.2%}")
+            f"✅ Gold layer validation completed: Quality Score = {validation_results['overall_quality_score']:.2%}"
+        )
 
         return validation_results
 
@@ -778,7 +778,8 @@ def check_silver_data_available(**context):
             return True
         else:
             raise AirflowException(
-                f"❌ No Silver data found for {check_date}. Cannot proceed with Gold layer processing.")
+                f"❌ No Silver data found for {check_date}. Cannot proceed with Gold layer processing."
+            )
 
     except Exception as e:
         logger.error(f"❌ Error checking Silver data availability: {str(e)}")

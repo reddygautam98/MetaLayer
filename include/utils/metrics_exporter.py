@@ -174,7 +174,8 @@ def collect_real_etl_metrics():
 
                             except Exception as e:
                                 logger.warning(
-                                    f"Could not collect metrics for {layer}.{table}: {e}")
+                                    f"Could not collect metrics for {layer}.{table}: {e}"
+                                )
 
                         # Database pool metrics (simulated but realistic)
                         cur.execute(
@@ -193,7 +194,8 @@ def collect_real_etl_metrics():
                         )  # Max pool size
 
                         logger.info(
-                            f"Updated metrics - Active connections: {active_connections}")
+                            f"Updated metrics - Active connections: {active_connections}"
+                        )
 
             except Exception as e:
                 logger.error(f"Error collecting ETL metrics: {e}")

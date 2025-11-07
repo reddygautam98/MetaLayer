@@ -1,18 +1,17 @@
-IF OBJECT_ID('bronze.erp_orders_raw') IS NULL
-CREATE TABLE bronze.erp_orders_raw (
-  order_id        NVARCHAR(50),
-  order_date      DATETIME2,
-  customer_id     NVARCHAR(50),
-  status          NVARCHAR(30),
+-- Bronze layer DDL for PostgreSQL
+CREATE TABLE IF NOT EXISTS bronze.erp_orders_raw (
+  order_id        VARCHAR(50),
+  order_date      TIMESTAMP,
+  customer_id     VARCHAR(50),
+  status          VARCHAR(30),
   total_amount    DECIMAL(18,2)
 );
 
-IF OBJECT_ID('bronze.crm_customers_raw') IS NULL
-CREATE TABLE bronze.crm_customers_raw (
-  customer_id     NVARCHAR(50),
-  customer_name   NVARCHAR(200),
-  email           NVARCHAR(200),
-  phone           NVARCHAR(50),
-  country         NVARCHAR(100),
-  created_at      DATETIME2
+CREATE TABLE IF NOT EXISTS bronze.crm_customers_raw (
+  customer_id     VARCHAR(50),
+  customer_name   VARCHAR(200),
+  email           VARCHAR(200),
+  phone           VARCHAR(50),
+  country         VARCHAR(100),
+  created_at      TIMESTAMP
 );

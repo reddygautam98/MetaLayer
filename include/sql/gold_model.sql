@@ -1,23 +1,22 @@
-IF OBJECT_ID('gold.dim_customer') IS NULL
-CREATE TABLE gold.dim_customer (
-  customer_key INT IDENTITY(1,1) PRIMARY KEY,
-  customer_id NVARCHAR(50) UNIQUE,
-  customer_name NVARCHAR(200),
-  email NVARCHAR(200),
-  phone NVARCHAR(50),
-  country NVARCHAR(100)
+-- Gold layer DDL for PostgreSQL
+CREATE TABLE IF NOT EXISTS gold.dim_customer (
+  customer_key SERIAL PRIMARY KEY,
+  customer_id VARCHAR(50) UNIQUE,
+  customer_name VARCHAR(200),
+  email VARCHAR(200),
+  phone VARCHAR(50),
+  country VARCHAR(100)
 );
 TRUNCATE TABLE gold.dim_customer;
 INSERT INTO gold.dim_customer (customer_id, customer_name, email, phone, country)
 SELECT customer_id, customer_name, email, phone, country
 FROM silver.customers;
 
-IF OBJECT_ID('gold.fact_sales') IS NULL
-CREATE TABLE gold.fact_sales (
-  order_id NVARCHAR(50) PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS gold.fact_sales (
+  order_id VARCHAR(50) PRIMARY KEY,
   order_date DATE,
   customer_key INT,
-  status NVARCHAR(30),
+  status VARCHAR(30),
   total_amount DECIMAL(18,2),
   CONSTRAINT fk_sales_dim_customer FOREIGN KEY (customer_key) REFERENCES gold.dim_customer(customer_key)
 );

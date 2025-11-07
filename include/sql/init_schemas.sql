@@ -1,3 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'bronze') EXEC('CREATE SCHEMA bronze');
-IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'silver') EXEC('CREATE SCHEMA silver');
-IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'gold')   EXEC('CREATE SCHEMA gold');
+-- Schema initialization for PostgreSQL
+CREATE SCHEMA IF NOT EXISTS bronze;
+CREATE SCHEMA IF NOT EXISTS silver;
+CREATE SCHEMA IF NOT EXISTS gold;

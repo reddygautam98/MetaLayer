@@ -3,12 +3,13 @@ Data Quality Testing Suite for MetaLayer
 Comprehensive tests for data validation and quality assurance
 """
 
-import pytest
-import pandas as pd
-import psycopg2
 import os
 from datetime import datetime, timedelta
-from typing import Dict, List, Any
+from typing import Any, Dict, List
+
+import pandas as pd
+import psycopg2
+import pytest
 
 
 @pytest.fixture

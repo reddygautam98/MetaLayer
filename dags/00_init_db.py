@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+
 from airflow import DAG
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 

@@ -13,15 +13,15 @@ Features:
 """
 
 import hashlib
-import pandas as pd
-from datetime import datetime
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass
-from enum import Enum
 import logging
+from dataclasses import dataclass
+from datetime import datetime
+from enum import Enum
+from typing import Any, Dict, List, Optional
 
-from airflow.providers.postgres.hooks.postgres import PostgresHook
+import pandas as pd
 from airflow.exceptions import AirflowException
+from airflow.providers.postgres.hooks.postgres import PostgresHook
 
 logger = logging.getLogger(__name__)
 

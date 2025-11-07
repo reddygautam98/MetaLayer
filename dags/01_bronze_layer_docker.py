@@ -16,22 +16,22 @@ Features:
 - Production-ready error handling and recovery
 """
 
+import logging
 import os
 import sys
-import pandas as pd
-import logging
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
+import pandas as pd
 from airflow import DAG
-from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
-from airflow.providers.postgres.hooks.postgres import PostgresHook
-from airflow.operators.python import PythonOperator, BranchPythonOperator
-from airflow.operators.dummy import DummyOperator
-from airflow.operators.email import EmailOperator
 from airflow.exceptions import AirflowException, AirflowSkipException
 from airflow.models import Variable
+from airflow.operators.dummy import DummyOperator
+from airflow.operators.email import EmailOperator
+from airflow.operators.python import BranchPythonOperator, PythonOperator
+from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
+from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.utils.trigger_rule import TriggerRule
 
 # Add include path for utilities

@@ -5,13 +5,14 @@ This script generates comprehensive data quality reports from test results
 and database metrics. It creates HTML reports and JSON summaries for CI/CD.
 """
 
+import json
 import os
 import sys
-import json
-import psycopg2
+import traceback
 from datetime import datetime, timedelta
 from pathlib import Path
-import traceback
+
+import psycopg2
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent

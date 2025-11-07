@@ -7,10 +7,10 @@ Currently contains placeholder tests - to be implemented.
 Run with: python tests/performance/test_dag_performance.py
 """
 
+import json
 import os
 import sys
 import time
-import json
 from datetime import datetime
 from pathlib import Path
 

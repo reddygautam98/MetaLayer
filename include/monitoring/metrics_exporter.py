@@ -3,12 +3,13 @@ MetaLayer Prometheus Metrics Exporter
 This module exports custom metrics for the MetaLayer data pipeline.
 """
 
-import time
 import logging
-from prometheus_client import start_http_server, Gauge, Counter, Histogram, Info
-import threading
 import os
+import threading
+import time
 from datetime import datetime
+
+from prometheus_client import Counter, Gauge, Histogram, Info, start_http_server
 
 # Lazy import for optional dependencies - only imported when needed
 _psycopg2 = None

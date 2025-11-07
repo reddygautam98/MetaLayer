@@ -52,15 +52,22 @@ jobs:
         python -m venv .venv-security
         source .venv-security/bin/activate
         pip install --upgrade pip
+        
+        # Pin typer to a version compatible with the safety CLI (prevents AttributeError: typer.rich_utils)
+        pip install "typer<0.10.0"
+        
+        # Then install the rest of the security tooling
         pip install -r requirements-security.txt
 
         # Print versions to help debugging in CI logs
         python --version || true
         pip --version || true
         echo "Security tools versions:"
+        python -c "import typer, sys; print('typer', getattr(typer,'__version__', 'unknown'))" || true
         safety --version || true
         bandit --version || true
         semgrep --version || true
+        pip freeze | grep -E "(typer|safety|bandit|semgrep)" || true
         
     - name: 🔍 Safety Check (Known Vulnerabilities)
       run: |

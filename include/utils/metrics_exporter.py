@@ -3,11 +3,12 @@ MetaLayer Prometheus Metrics Exporter
 Collects and exposes custom metrics for Grafana dashboards
 """
 
-import time
-import random
-from prometheus_client import Counter, Gauge, Histogram, start_http_server
-import threading
 import logging
+import random
+import threading
+import time
+
+from prometheus_client import Counter, Gauge, Histogram, start_http_server
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

@@ -5,8 +5,8 @@ Simple test to verify DAG loading
 
 def test_dag_imports():
     """Test that all DAGs can be imported without errors"""
-    import sys
     import os
+    import sys
 
     # Add dags directory to path
     dags_dir = os.path.join(os.path.dirname(__file__), "..", "dags")
@@ -15,9 +15,9 @@ def test_dag_imports():
     try:
         # Import DAGs
         import bronze_layer_etl_pipeline
-        import silver_layer_etl_pipeline
         import gold_layer_analytics_pipeline
         import master_etl_orchestrator
+        import silver_layer_etl_pipeline
 
         print("✅ All DAGs imported successfully")
         return True

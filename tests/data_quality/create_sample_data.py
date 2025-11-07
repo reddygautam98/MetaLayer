@@ -3,11 +3,12 @@ Sample Data Creation Script for MetaLayer Testing
 Creates sample data for testing data quality and pipeline validation
 """
 
-import psycopg2
-import pandas as pd
 import os
-from datetime import datetime, timedelta
 import random
+from datetime import datetime, timedelta
+
+import pandas as pd
+import psycopg2
 
 
 def create_sample_data():

@@ -14,19 +14,19 @@ Features:
 """
 
 import logging
+import threading
 import time
 from contextlib import contextmanager
-from typing import Optional, Dict, Any, Generator
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-import threading
-from queue import Queue, Empty
+from queue import Empty, Queue
+from typing import Any, Dict, Generator, Optional
 
 import psycopg2
-from psycopg2 import pool, extras
-from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.exceptions import AirflowException
 from airflow.models import Variable
+from airflow.providers.postgres.hooks.postgres import PostgresHook
+from psycopg2 import extras, pool
 
 logger = logging.getLogger(__name__)
 

@@ -16,22 +16,23 @@ Features:
 - Integration with monitoring stack (Prometheus/Grafana)
 """
 
-import logging
 import json
-import pandas as pd
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Union
-from dataclasses import dataclass, asdict
-from pathlib import Path
+import logging
 import uuid
+from dataclasses import asdict, dataclass
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+
+import pandas as pd
 
 # Great Expectations imports
 try:
     import great_expectations as gx
-    from great_expectations.core.batch import RuntimeBatchRequest
     from great_expectations.checkpoint import SimpleCheckpoint
-    from great_expectations.exceptions import DataContextError
+    from great_expectations.core.batch import RuntimeBatchRequest
     from great_expectations.data_context.types.base import DataContextConfig
+    from great_expectations.exceptions import DataContextError
 
     GX_AVAILABLE = True
 except ImportError:
@@ -40,9 +41,9 @@ except ImportError:
     )
     GX_AVAILABLE = False
 
-from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.exceptions import AirflowException
 from airflow.models import Variable
+from airflow.providers.postgres.hooks.postgres import PostgresHook
 
 logger = logging.getLogger(__name__)
 

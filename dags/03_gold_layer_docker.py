@@ -17,25 +17,25 @@ Features:
 - Comprehensive performance monitoring
 """
 
-import pandas as pd
 import logging
-from datetime import datetime, timedelta
-from typing import Dict, Any, List
-
-from airflow import DAG
-from airflow.providers.postgres.hooks.postgres import PostgresHook
-from airflow.operators.python import PythonOperator
-from airflow.operators.dummy import DummyOperator
-from airflow.sensors.external_task import ExternalTaskSensor
-from airflow.models import Variable
-from airflow.utils.trigger_rule import TriggerRule
 
 # Add include path for utilities
 import sys
+from datetime import datetime, timedelta
+from typing import Any, Dict, List
+
+import pandas as pd
+from airflow import DAG
+from airflow.models import Variable
+from airflow.operators.dummy import DummyOperator
+from airflow.operators.python import PythonOperator
+from airflow.providers.postgres.hooks.postgres import PostgresHook
+from airflow.sensors.external_task import ExternalTaskSensor
+from airflow.utils.trigger_rule import TriggerRule
 
 sys.path.append("/opt/airflow/include")
-from utils.metrics_exporter import export_pipeline_metrics
 from utils.data_quality_monitoring import DataQualityValidator
+from utils.metrics_exporter import export_pipeline_metrics
 
 # =====================================================
 # CONFIGURATION & CONSTANTS

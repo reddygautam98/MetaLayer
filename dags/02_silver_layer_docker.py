@@ -17,27 +17,27 @@ Features:
 - Error handling with data lineage tracking
 """
 
-import sys
-import pandas as pd
 import logging
+import sys
 from datetime import datetime, timedelta
-from typing import Dict, Any
 from pathlib import Path
+from typing import Any, Dict
 
+import pandas as pd
 from airflow import DAG
-from airflow.providers.postgres.hooks.postgres import PostgresHook
-from airflow.operators.python import PythonOperator
-from airflow.operators.dummy import DummyOperator
-from airflow.sensors.external_task import ExternalTaskSensor
 from airflow.exceptions import AirflowException
 from airflow.models import Variable
+from airflow.operators.dummy import DummyOperator
+from airflow.operators.python import PythonOperator
+from airflow.providers.postgres.hooks.postgres import PostgresHook
+from airflow.sensors.external_task import ExternalTaskSensor
 from airflow.utils.trigger_rule import TriggerRule
 
 # Add include path for utilities
 sys.path.append("/opt/airflow/include")
 from utils.data_quality_monitoring import DataQualityValidator
-from utils.metrics_exporter import export_pipeline_metrics
 from utils.incremental_processing import IncrementalProcessor
+from utils.metrics_exporter import export_pipeline_metrics
 
 # =====================================================
 # CONFIGURATION & CONSTANTS

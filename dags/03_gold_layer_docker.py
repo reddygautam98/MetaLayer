@@ -26,6 +26,7 @@ from typing import Any, Dict, List
 
 import pandas as pd
 from airflow import DAG
+from airflow.exceptions import AirflowException
 from airflow.models import Variable
 from airflow.operators.dummy import DummyOperator
 from airflow.operators.python import PythonOperator

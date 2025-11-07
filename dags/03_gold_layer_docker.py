@@ -17,8 +17,6 @@ Features:
 - Comprehensive performance monitoring
 """
 
-from utils.metrics_exporter import export_pipeline_metrics
-from utils.data_quality_monitoring import DataQualityValidator
 import logging
 
 # Add include path for utilities
@@ -35,6 +33,9 @@ from airflow.operators.python import PythonOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.sensors.external_task import ExternalTaskSensor
 from airflow.utils.trigger_rule import TriggerRule
+
+from utils.data_quality_monitoring import DataQualityValidator
+from utils.metrics_exporter import export_pipeline_metrics
 
 sys.path.append("/opt/airflow/include")
 

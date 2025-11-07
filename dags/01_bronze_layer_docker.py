@@ -16,9 +16,6 @@ Features:
 - Production-ready error handling and recovery
 """
 
-from utils.metrics_exporter import export_pipeline_metrics
-from utils.data_quality_monitoring import DataQualityValidator
-from utils.connection_pooling import get_db_connection
 import logging
 import os
 import sys
@@ -36,6 +33,10 @@ from airflow.operators.python import BranchPythonOperator, PythonOperator
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.utils.trigger_rule import TriggerRule
+
+from utils.connection_pooling import get_db_connection
+from utils.data_quality_monitoring import DataQualityValidator
+from utils.metrics_exporter import export_pipeline_metrics
 
 # Add include path for utilities
 sys.path.append("/opt/airflow/include")

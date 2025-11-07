@@ -17,11 +17,8 @@ Features:
 - Performance tracking and optimization
 """
 
-from utils.metrics_exporter import export_pipeline_metrics
 import json
 import logging
-
-# Add include path for utilities
 import sys
 from datetime import datetime, timedelta
 from typing import Any, Dict
@@ -36,6 +33,9 @@ from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.sensors.external_task import ExternalTaskSensor
 from airflow.utils.trigger_rule import TriggerRule
 
+from utils.metrics_exporter import export_pipeline_metrics
+
+# Add include path for utilities
 sys.path.append("/opt/airflow/include")
 
 # =====================================================

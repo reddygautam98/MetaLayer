@@ -17,9 +17,6 @@ Features:
 - Error handling with data lineage tracking
 """
 
-from utils.metrics_exporter import export_pipeline_metrics
-from utils.incremental_processing import IncrementalProcessor
-from utils.data_quality_monitoring import DataQualityValidator
 import logging
 import sys
 from datetime import datetime, timedelta
@@ -35,6 +32,10 @@ from airflow.operators.python import PythonOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.sensors.external_task import ExternalTaskSensor
 from airflow.utils.trigger_rule import TriggerRule
+
+from utils.data_quality_monitoring import DataQualityValidator
+from utils.incremental_processing import IncrementalProcessor
+from utils.metrics_exporter import export_pipeline_metrics
 
 # Add include path for utilities
 sys.path.append("/opt/airflow/include")

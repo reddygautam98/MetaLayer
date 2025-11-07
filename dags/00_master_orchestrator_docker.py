@@ -522,15 +522,12 @@ def finalize_pipeline_run(**context) -> Dict[str, Any]:
         # Generate alerts if needed
         if not final_summary["sla_met"]:
             logger.warning(
-                f"⚠️ SLA missed: {
-                    total_duration /
-                    60:.1f} minutes (SLA: {SLA_MINUTES} minutes)"
+                f"⚠️ SLA missed: {total_duration / 60:.1f} minutes (SLA: {SLA_MINUTES} minutes)"
             )
 
         if final_summary["overall_quality_score"] < 0.8:
             logger.warning(
-                f"⚠️ Quality score below threshold: {
-                    final_summary['overall_quality_score']:.2%}"
+                f"⚠️ Quality score below threshold: {final_summary['overall_quality_score']:.2%}"
             )
 
         # Export final metrics

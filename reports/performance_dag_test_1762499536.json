@@ -1,0 +1,27 @@
+{
+  "timestamp": "2025-11-07T12:42:16.376385",
+  "test_type": "dag_performance",
+  "results": {
+    "dag_import_performance": {
+      "00_init_db.py": 0.0004458427429199219
+    },
+    "sql_parsing_performance": {
+      "bronze_ddl.sql": 0.015718460083007812,
+      "bronze_ddl_pg.sql": 0.022986888885498047,
+      "complete_schema_docker.sql": 0.0006270408630371094,
+      "gold_model.sql": 0.012336254119873047,
+      "gold_model_pg.sql": 0.017346858978271484,
+      "init_schemas.sql": 0.020737171173095703,
+      "init_schemas_pg.sql": 0.014929771423339844,
+      "partitioning_setup_pg.sql": 0.02785348892211914,
+      "silver_transform.sql": 0.012279272079467773,
+      "silver_transform_pg.sql": 0.016566991806030273
+    }
+  },
+  "summary": {
+    "total_dags_tested": 1,
+    "total_sql_files_tested": 10,
+    "avg_dag_import_time": 0.0004458427429199219,
+    "avg_sql_parse_time": 0.016138219833374025
+  }
+}

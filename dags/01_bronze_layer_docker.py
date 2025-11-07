@@ -452,17 +452,11 @@ def validate_bronze_layer(**context) -> Dict[str, Any]:
         issues_found = []
         if customers_validation.get("overall_status") != "PASSED":
             issues_found.append(
-                f"Customers table: {
-                    customers_validation.get(
-                        'error',
-                        'Quality checks failed')}"
+                f"Customers table: {customers_validation.get('error', 'Quality checks failed')}"
             )
         if orders_validation.get("overall_status") != "PASSED":
             issues_found.append(
-                f"Orders table: {
-                    orders_validation.get(
-                        'error',
-                        'Quality checks failed')}"
+                f"Orders table: {orders_validation.get('error', 'Quality checks failed')}"
             )
 
         validation_results = {

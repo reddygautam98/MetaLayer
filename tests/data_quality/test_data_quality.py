@@ -72,7 +72,7 @@ class TestDataQuality:
         try:
             cursor.execute(
                 """
-                SELECT COUNT(*) FROM silver.sales_cleaned 
+                SELECT COUNT(*) FROM silver.sales_cleaned
                 WHERE sale_amount_clean <= 0 OR quantity_clean <= 0
             """
             )
@@ -185,8 +185,8 @@ class TestDataQuality:
 
                 duplicate = cursor.fetchone()
                 assert (
-                    duplicate is None
-                ), f"Found duplicate {key_column} in {table}: {duplicate[0] if duplicate else 'None'}"
+                    duplicate is None), f"Found duplicate {key_column} in {table}: {
+                    duplicate[0] if duplicate else 'None'}"
 
             except psycopg2.Error:
                 pytest.skip(f"Table {table} does not exist")
@@ -266,8 +266,8 @@ class TestDataProfiling:
                         null_percentage = (null_count / total_records) * 100
 
                         assert (
-                            null_percentage <= null_threshold
-                        ), f"Column {column} in {table} has {null_percentage:.2f}% null values (threshold: {null_threshold}%)"
+                            null_percentage <= null_threshold), f"Column {column} in {table} has {
+                            null_percentage:.2f}% null values (threshold: {null_threshold}%)"
 
             except psycopg2.Error:
                 pytest.skip(f"Table {table} does not exist")

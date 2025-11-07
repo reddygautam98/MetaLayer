@@ -123,10 +123,10 @@ class MetaLayerMetricsCollector:
                 # Get active connections
                 cur.execute(
                     """
-                    SELECT 
+                    SELECT
                         state,
                         COUNT(*) as count
-                    FROM pg_stat_activity 
+                    FROM pg_stat_activity
                     WHERE datname = %s
                     GROUP BY state
                 """,
@@ -173,11 +173,11 @@ class MetaLayerMetricsCollector:
                         # Get table count and record counts
                         cur.execute(
                             f"""
-                            SELECT 
+                            SELECT
                                 schemaname,
                                 tablename,
                                 n_tup_ins + n_tup_upd + n_tup_del as total_activity
-                            FROM pg_stat_user_tables 
+                            FROM pg_stat_user_tables
                             WHERE schemaname = %s
                         """,
                             (layer,),
@@ -191,7 +191,8 @@ class MetaLayerMetricsCollector:
                                 table_name = table["tablename"]
                                 activity = table["total_activity"] or 0
 
-                                # Simple quality score: 0.9 if has recent activity, 0.7 otherwise
+                                # Simple quality score: 0.9 if has recent activity, 0.7
+                                # otherwise
                                 quality_score = 0.9 if activity > 0 else 0.7
 
                                 metalayer_data_quality_score.labels(

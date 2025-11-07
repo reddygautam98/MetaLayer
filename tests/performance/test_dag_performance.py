@@ -37,7 +37,8 @@ def test_dag_import_performance():
 
         start_time = time.time()
         try:
-            # Note: This is a simplified test - full DAG testing would require Airflow setup
+            # Note: This is a simplified test - full DAG testing would require Airflow
+            # setup
             with open(dag_file, "r") as f:
                 content = f.read()
                 # Basic validation that it looks like a DAG file

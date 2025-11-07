@@ -36,7 +36,8 @@ from pendulum import datetime
 def example_astronauts():
     # Define tasks
     @task(
-        # Define an asset outlet for the task. This can be used to schedule downstream DAGs when this task has run.
+        # Define an asset outlet for the task. This can be used to schedule
+        # downstream DAGs when this task has run.
         outlets=[Asset("current_astronauts")]
     )  # Define that this task updates the `current_astronauts` Asset
     def get_astronauts(**context) -> list[dict]:

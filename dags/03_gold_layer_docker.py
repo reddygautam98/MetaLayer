@@ -17,6 +17,8 @@ Features:
 - Comprehensive performance monitoring
 """
 
+from utils.metrics_exporter import export_pipeline_metrics
+from utils.data_quality_monitoring import DataQualityValidator
 import logging
 
 # Add include path for utilities
@@ -35,8 +37,6 @@ from airflow.sensors.external_task import ExternalTaskSensor
 from airflow.utils.trigger_rule import TriggerRule
 
 sys.path.append("/opt/airflow/include")
-from utils.data_quality_monitoring import DataQualityValidator
-from utils.metrics_exporter import export_pipeline_metrics
 
 # =====================================================
 # CONFIGURATION & CONSTANTS
@@ -92,7 +92,7 @@ def build_customer_dimension(**context) -> Dict[str, Any]:
 
             # Get latest customer data from Silver layer
             silver_query = """
-                SELECT 
+                SELECT
                     customer_id,
                     customer_name,
                     email,
@@ -128,7 +128,7 @@ def build_customer_dimension(**context) -> Dict[str, Any]:
 
             # Get existing dimension records
             existing_query = """
-                SELECT 
+                SELECT
                     customer_key, customer_id, customer_name, email, phone,
                     address, is_active, effective_from, effective_to, is_current
                 FROM gold.dim_customer
@@ -160,7 +160,7 @@ def build_customer_dimension(**context) -> Dict[str, Any]:
                 # Get current dimension record
                 current_record = df_existing[
                     (df_existing["customer_id"] == customer_id)
-                    & (df_existing["is_current"] == True)
+                    & df_existing["is_current"]
                 ]
 
                 if current_record.empty:
@@ -205,7 +205,7 @@ def build_customer_dimension(**context) -> Dict[str, Any]:
                     if changes_detected:
                         # Close current record
                         update_query = """
-                            UPDATE gold.dim_customer 
+                            UPDATE gold.dim_customer
                             SET effective_to = %s, is_current = false
                             WHERE customer_key = %s
                         """
@@ -284,10 +284,10 @@ def build_order_fact_table(**context) -> Dict[str, Any]:
             # Build detailed fact table from Silver orders
             fact_insert_query = """
                 INSERT INTO gold.fact_orders (
-                    order_date_key, customer_key, order_id, 
+                    order_date_key, customer_key, order_id,
                     quantity, unit_price, total_amount, is_valid
                 )
-                SELECT 
+                SELECT
                     TO_CHAR(o.order_date, 'YYYYMMDD')::INTEGER as order_date_key,
                     COALESCE(dc.customer_key, -1) as customer_key,
                     o.order_id,
@@ -296,7 +296,7 @@ def build_order_fact_table(**context) -> Dict[str, Any]:
                     o.total_amount,
                     o.is_valid
                 FROM silver.orders_cleaned o
-                LEFT JOIN gold.dim_customer dc ON o.customer_id = dc.customer_id 
+                LEFT JOIN gold.dim_customer dc ON o.customer_id = dc.customer_id
                     AND dc.is_current = true
                 WHERE DATE(o.processed_timestamp) = %s
                     AND o.is_valid = true
@@ -316,7 +316,7 @@ def build_order_fact_table(**context) -> Dict[str, Any]:
                     date_key, total_orders, total_revenue, avg_order_value,
                     unique_customers, total_quantity
                 )
-                SELECT 
+                SELECT
                     order_date_key,
                     COUNT(*) as total_orders,
                     SUM(total_amount) as total_revenue,
@@ -343,7 +343,7 @@ def build_order_fact_table(**context) -> Dict[str, Any]:
                     year_month, total_orders, total_revenue, avg_order_value,
                     unique_customers, total_quantity
                 )
-                SELECT 
+                SELECT
                     TO_CHAR(%s, 'YYYYMM')::INTEGER as year_month,
                     SUM(total_orders) as total_orders,
                     SUM(total_revenue) as total_revenue,
@@ -407,7 +407,7 @@ def build_business_kpis(**context) -> Dict[str, Any]:
 
             # Customer Lifetime Value (CLV) calculation
             clv_query = """
-                SELECT 
+                SELECT
                     dc.customer_id,
                     COUNT(fo.order_id) as total_orders,
                     SUM(fo.total_amount) as total_spent,
@@ -420,12 +420,13 @@ def build_business_kpis(**context) -> Dict[str, Any]:
             """
 
             cursor.execute(clv_query)
-            clv_data = cursor.fetchall()
+            # Store CLV data for analytics (data available in cursor)
+            logger.info(f"Calculated CLV metrics for {cursor.rowcount} customers")
 
             # Calculate cohort analysis
             cohort_query = """
                 WITH customer_cohorts AS (
-                    SELECT 
+                    SELECT
                         customer_key,
                         MIN(order_date_key) as first_order_date,
                         TO_CHAR(TO_DATE(MIN(order_date_key)::text, 'YYYYMMDD'), 'YYYY-MM') as cohort_month
@@ -433,7 +434,7 @@ def build_business_kpis(**context) -> Dict[str, Any]:
                     GROUP BY customer_key
                 ),
                 cohort_metrics AS (
-                    SELECT 
+                    SELECT
                         cc.cohort_month,
                         COUNT(DISTINCT cc.customer_key) as cohort_size,
                         COUNT(DISTINCT fo.customer_key) as active_customers,
@@ -460,7 +461,7 @@ def build_business_kpis(**context) -> Dict[str, Any]:
 
             # Product performance metrics
             product_performance_query = """
-                SELECT 
+                SELECT
                     COUNT(DISTINCT customer_key) as unique_buyers,
                     SUM(quantity) as total_quantity_sold,
                     SUM(total_amount) as total_revenue,
@@ -542,7 +543,7 @@ def validate_gold_layer_quality(**context) -> Dict[str, Any]:
             {
                 "name": "customer_dimension_completeness",
                 "query": """
-                    SELECT COUNT(*) FROM gold.dim_customer 
+                    SELECT COUNT(*) FROM gold.dim_customer
                     WHERE is_current = true AND customer_name IS NOT NULL
                 """,
                 "expected_min": 1,
@@ -550,7 +551,7 @@ def validate_gold_layer_quality(**context) -> Dict[str, Any]:
             {
                 "name": "scd_integrity_check",
                 "query": """
-                    SELECT COUNT(*) FROM gold.dim_customer 
+                    SELECT COUNT(*) FROM gold.dim_customer
                     WHERE effective_from > effective_to
                 """,
                 "expected_max": 0,
@@ -566,7 +567,7 @@ def validate_gold_layer_quality(**context) -> Dict[str, Any]:
             {
                 "name": "fact_orders_completeness",
                 "query": f"""
-                    SELECT COUNT(*) FROM gold.fact_orders 
+                    SELECT COUNT(*) FROM gold.fact_orders
                     WHERE order_date_key = {int(execution_date.strftime('%Y%m%d'))}
                 """,
                 "expected_min": 1,
@@ -575,9 +576,9 @@ def validate_gold_layer_quality(**context) -> Dict[str, Any]:
                 "name": "revenue_consistency",
                 "query": f"""
                     SELECT ABS(
-                        (SELECT SUM(total_amount) FROM gold.fact_orders 
+                        (SELECT SUM(total_amount) FROM gold.fact_orders
                          WHERE order_date_key = {int(execution_date.strftime('%Y%m%d'))}) -
-                        (SELECT total_revenue FROM gold.agg_daily_sales 
+                        (SELECT total_revenue FROM gold.agg_daily_sales
                          WHERE date_key = {int(execution_date.strftime('%Y%m%d'))})
                     )
                 """,
@@ -592,7 +593,7 @@ def validate_gold_layer_quality(**context) -> Dict[str, Any]:
             {
                 "name": "daily_kpis_present",
                 "query": f"""
-                    SELECT COUNT(DISTINCT kpi_name) FROM gold.business_kpis 
+                    SELECT COUNT(DISTINCT kpi_name) FROM gold.business_kpis
                     WHERE date_key = {int(execution_date.strftime('%Y%m%d'))}
                 """,
                 "expected_min": 3,  # Expect at least 3 different KPIs
@@ -616,8 +617,8 @@ def validate_gold_layer_quality(**context) -> Dict[str, Any]:
         )
 
         logger.info(
-            f"✅ Gold layer validation completed: Quality Score = {validation_results['overall_quality_score']:.2%}"
-        )
+            f"✅ Gold layer validation completed: Quality Score = {
+                validation_results['overall_quality_score']:.2%}")
 
         return validation_results
 
@@ -642,7 +643,7 @@ def generate_analytics_summary(**context) -> Dict[str, Any]:
 
             # Daily summary metrics
             daily_summary_query = f"""
-                SELECT 
+                SELECT
                     total_orders,
                     total_revenue,
                     avg_order_value,
@@ -664,7 +665,7 @@ def generate_analytics_summary(**context) -> Dict[str, Any]:
 
             # Customer insights
             customer_insights_query = """
-                SELECT 
+                SELECT
                     COUNT(*) as total_active_customers,
                     AVG(data_quality_score) as avg_quality_score
                 FROM gold.dim_customer
@@ -750,14 +751,14 @@ def check_silver_data_available(**context):
         check_date = execution_date.date()
 
         customers_query = """
-            SELECT COUNT(*) 
-            FROM silver.dim_customers 
+            SELECT COUNT(*)
+            FROM silver.dim_customers
             WHERE DATE(created_at) >= %s OR DATE(updated_at) >= %s
         """
 
         orders_query = """
-            SELECT COUNT(*) 
-            FROM silver.fact_orders 
+            SELECT COUNT(*)
+            FROM silver.fact_orders
             WHERE DATE(created_at) >= %s OR DATE(updated_at) >= %s
         """
 
@@ -777,8 +778,7 @@ def check_silver_data_available(**context):
             return True
         else:
             raise AirflowException(
-                f"❌ No Silver data found for {check_date}. Cannot proceed with Gold layer processing."
-            )
+                f"❌ No Silver data found for {check_date}. Cannot proceed with Gold layer processing.")
 
     except Exception as e:
         logger.error(f"❌ Error checking Silver data availability: {str(e)}")
@@ -791,7 +791,7 @@ wait_for_silver = PythonOperator(
     dag=dag,
     doc_md="""
     ## Check Silver Data Availability
-    
+
     Verifies that Silver layer data is available for processing.
     This approach is more flexible than ExternalTaskSensor for manual triggers
     and mixed scheduling scenarios.

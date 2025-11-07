@@ -53,6 +53,9 @@ jobs:
         source .venv-security/bin/activate
         pip install --upgrade pip
         
+        # Pin marshmallow to avoid incompatibility with security tooling that expects marshmallow<4
+        pip install "marshmallow<4.0.0"
+        
         # Pin typer to a version compatible with the safety CLI (prevents AttributeError: typer.rich_utils)
         pip install "typer<0.10.0"
         

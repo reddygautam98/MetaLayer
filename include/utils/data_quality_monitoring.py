@@ -202,11 +202,11 @@ class DataQualityMonitor:
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
-        
-        CREATE INDEX IF NOT EXISTS idx_dq_metrics_table_time 
+
+        CREATE INDEX IF NOT EXISTS idx_dq_metrics_table_time
         ON {self.metrics_table}(table_name, timestamp);
-        
-        CREATE INDEX IF NOT EXISTS idx_dq_metrics_status 
+
+        CREATE INDEX IF NOT EXISTS idx_dq_metrics_status
         ON {self.metrics_table}(status, timestamp);
         """
 
@@ -224,8 +224,8 @@ class DataQualityMonitor:
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
-        
-        CREATE INDEX IF NOT EXISTS idx_dq_results_table_time 
+
+        CREATE INDEX IF NOT EXISTS idx_dq_results_table_time
         ON {self.results_table}(table_name, timestamp);
         """
 
@@ -340,8 +340,7 @@ class DataQualityMonitor:
             }
 
             logger.info(
-                f"Created expectation suite for {schema_name}.{table_name}: {suite_info}"
-            )
+                f"Created expectation suite for {schema_name}.{table_name}: {suite_info}")
             return suite_info
 
         except Exception as e:
@@ -510,23 +509,21 @@ class DataQualityMonitor:
             full_table_name = f"{schema_name}.{table_name}"
 
             # Basic checks
-            checks = [
-                (
-                    "row_count",
-                    f"SELECT COUNT(*) FROM {full_table_name}",
-                    lambda x: x > 0,
-                ),
-                (
-                    "null_check",
-                    f"SELECT COUNT(*) FROM {full_table_name} WHERE {self._get_primary_key(schema_name, table_name)} IS NULL",
-                    lambda x: x == 0,
-                ),
-                (
-                    "duplicate_check",
-                    f"SELECT COUNT(*) - COUNT(DISTINCT {self._get_primary_key(schema_name, table_name)}) FROM {full_table_name}",
-                    lambda x: x == 0,
-                ),
-            ]
+            checks = [("row_count",
+                       f"SELECT COUNT(*) FROM {full_table_name}",
+                       lambda x: x > 0,
+                       ),
+                      ("null_check",
+                       f"SELECT COUNT(*) FROM {full_table_name} WHERE {self._get_primary_key(schema_name,
+                                                                                             table_name)} IS NULL",
+                       lambda x: x == 0,
+                       ),
+                      ("duplicate_check",
+                       f"SELECT COUNT(*) - COUNT(DISTINCT {self._get_primary_key(schema_name,
+                                                                                 table_name)}) FROM {full_table_name}",
+                       lambda x: x == 0,
+                       ),
+                      ]
 
             successful = 0
             total = len(checks)
@@ -587,12 +584,12 @@ class DataQualityMonitor:
         """Get primary key column for a table"""
         try:
             pk_query = """
-            SELECT column_name 
+            SELECT column_name
             FROM information_schema.table_constraints tc
-            JOIN information_schema.key_column_usage kcu 
+            JOIN information_schema.key_column_usage kcu
                 ON tc.constraint_name = kcu.constraint_name
-            WHERE tc.table_schema = %s 
-                AND tc.table_name = %s 
+            WHERE tc.table_schema = %s
+                AND tc.table_name = %s
                 AND tc.constraint_type = 'PRIMARY KEY'
             ORDER BY kcu.ordinal_position
             LIMIT 1
@@ -609,8 +606,8 @@ class DataQualityMonitor:
         try:
             # Store main result
             result_sql = f"""
-            INSERT INTO {self.results_table} 
-                (check_id, table_name, total_expectations, successful_expectations, 
+            INSERT INTO {self.results_table}
+                (check_id, table_name, total_expectations, successful_expectations,
                  failed_expectations, success_rate, execution_time, summary, timestamp)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (check_id) DO UPDATE SET
@@ -674,7 +671,7 @@ class DataQualityMonitor:
 
             # Overall quality trends
             trend_query = f"""
-            SELECT 
+            SELECT
                 DATE(timestamp) as date,
                 AVG(success_rate) as avg_success_rate,
                 COUNT(*) as total_checks,
@@ -689,7 +686,7 @@ class DataQualityMonitor:
 
             # Table-level quality summary
             table_summary_query = f"""
-            SELECT 
+            SELECT
                 table_name,
                 AVG(success_rate) as avg_success_rate,
                 MIN(success_rate) as min_success_rate,
@@ -708,7 +705,7 @@ class DataQualityMonitor:
 
             # Failed metrics breakdown
             failed_metrics_query = f"""
-            SELECT 
+            SELECT
                 metric_name,
                 table_name,
                 COUNT(*) as failure_count,
@@ -791,8 +788,8 @@ def basic_data_quality_check(
 
         # Get table columns
         columns_query = f"""
-        SELECT column_name, data_type, is_nullable 
-        FROM information_schema.columns 
+        SELECT column_name, data_type, is_nullable
+        FROM information_schema.columns
         WHERE table_schema = '{schema_name}' AND table_name = '{table_name}'
         ORDER BY ordinal_position
         """
@@ -805,7 +802,7 @@ def basic_data_quality_check(
             # Check for null values
             null_count = hook.get_first(
                 f"""
-                SELECT COUNT(*) FROM {full_table_name} 
+                SELECT COUNT(*) FROM {full_table_name}
                 WHERE {column_name} IS NULL
             """
             )[0]
@@ -838,7 +835,7 @@ def basic_data_quality_check(
         if "email" in [col[0] for col in columns]:
             invalid_emails = hook.get_first(
                 f"""
-                SELECT COUNT(*) FROM {full_table_name} 
+                SELECT COUNT(*) FROM {full_table_name}
                 WHERE email IS NOT NULL AND email NOT LIKE '%@%'
             """
             )[0]
@@ -935,7 +932,7 @@ class DataQualityValidator:
         try:
             # Check for null values in key fields
             query = f"""
-            SELECT 
+            SELECT
                 COUNT(*) as total_rows,
                 COUNT(CASE WHEN customer_id IS NULL THEN 1 END) as null_customer_ids,
                 COUNT(CASE WHEN created_at IS NULL THEN 1 END) as null_created_dates
@@ -997,7 +994,7 @@ class DataQualityValidator:
         """
         try:
             query = f"""
-            SELECT 
+            SELECT
                 MAX({date_column}) as latest_record,
                 COUNT(*) as total_rows,
                 COUNT(CASE WHEN {date_column} >= NOW() - INTERVAL '{max_age_hours} hours' THEN 1 END) as recent_rows

@@ -4,11 +4,14 @@ Collects and exposes custom metrics for Grafana dashboards
 """
 
 import logging
+import os
 import random
 import threading
 import time
 
+import psycopg2
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
+from psycopg2.extras import RealDictCursor
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -159,20 +162,19 @@ def collect_real_etl_metrics():
                                 count = cur.fetchone()[0]
 
                                 # Update records processed metric
-                                metalayer_records_processed_total.labels(
+                                records_processed_total.labels(
                                     layer=layer, table=table, operation="processed"
                                 )._value._value = count
 
                                 # Simulate data quality scores
                                 quality_score = min(1.0, 0.85 + (count % 100) * 0.001)
-                                metalayer_data_quality_score.labels(
+                                data_quality_score.labels(
                                     layer=layer, table=table, check_type="completeness"
                                 ).set(quality_score)
 
                             except Exception as e:
                                 logger.warning(
-                                    f"Could not collect metrics for {layer}.{table}: {e}"
-                                )
+                                    f"Could not collect metrics for {layer}.{table}: {e}")
 
                         # Database pool metrics (simulated but realistic)
                         cur.execute(
@@ -180,19 +182,18 @@ def collect_real_etl_metrics():
                         )
                         active_connections = cur.fetchone()[0]
 
-                        metalayer_db_pool_active_connections.labels(
+                        db_pool_active_connections.labels(
                             pool_name="postgres_main", database="metalayer_etl"
                         ).set(active_connections)
 
-                        metalayer_db_pool_total_connections.labels(
+                        db_pool_total_connections.labels(
                             pool_name="postgres_main", database="metalayer_etl"
                         ).set(
                             50
                         )  # Max pool size
 
                         logger.info(
-                            f"Updated metrics - Active connections: {active_connections}"
-                        )
+                            f"Updated metrics - Active connections: {active_connections}")
 
             except Exception as e:
                 logger.error(f"Error collecting ETL metrics: {e}")
@@ -219,7 +220,7 @@ def simulate_processing_metrics():
                             0.5 + (hash(f"{layer}{operation}{table}") % 100) * 0.01
                         )
 
-                        metalayer_incremental_processing_duration_seconds.labels(
+                        incremental_processing_duration.labels(
                             layer=layer, operation=operation, table=table
                         ).observe(duration)
 
@@ -277,7 +278,7 @@ def export_pipeline_metrics(
 
         # Update records processed counter
         if records_processed > 0:
-            metalayer_records_processed_total.labels(
+            records_processed_total.labels(
                 layer=dag_id.replace("_layer_etl_pipeline", "").replace("_", ""),
                 table=task_id,
                 operation=status,
@@ -285,7 +286,7 @@ def export_pipeline_metrics(
 
         # Update execution time histogram
         if execution_time:
-            metalayer_incremental_processing_duration_seconds.labels(
+            incremental_processing_duration.labels(
                 layer=dag_id.replace("_layer_etl_pipeline", "").replace("_", ""),
                 operation=status,
                 table=task_id,

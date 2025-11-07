@@ -272,10 +272,10 @@ def insert_sample_silver_data(cursor):
     cursor.execute(
         """
         INSERT INTO silver.sales_cleaned (
-            sales_id, customer_id, product_code_clean, quantity_clean, 
+            sales_id, customer_id, product_code_clean, quantity_clean,
             sale_amount_clean, sale_date_clean
         )
-        SELECT 
+        SELECT
             sales_id,
             customer_id,
             UPPER(TRIM(product_code)) as product_code_clean,
@@ -295,7 +295,7 @@ def insert_sample_silver_data(cursor):
             customer_id, customer_name_clean, email_clean, phone_clean,
             city_clean, state_clean, zip_clean, dob_clean
         )
-        SELECT 
+        SELECT
             customer_id,
             TRIM(INITCAP(first_name)) || ' ' || TRIM(INITCAP(last_name)) as customer_name_clean,
             LOWER(TRIM(email)) as email_clean,
@@ -318,7 +318,7 @@ def insert_sample_gold_data(cursor):
     cursor.execute(
         """
         INSERT INTO gold.dim_customer (customer_id, customer_name, email_clean, city, state)
-        SELECT 
+        SELECT
             customer_id,
             customer_name_clean,
             email_clean,
@@ -335,7 +335,7 @@ def insert_sample_gold_data(cursor):
         INSERT INTO gold.fact_sales (
             sales_id, customer_key, product_code, quantity, total_amount, sale_date
         )
-        SELECT 
+        SELECT
             s.sales_id,
             d.customer_key,
             s.product_code_clean,

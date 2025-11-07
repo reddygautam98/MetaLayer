@@ -84,8 +84,8 @@ class IncrementalProcessor:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
-        
-        CREATE INDEX IF NOT EXISTS idx_incremental_state_table 
+
+        CREATE INDEX IF NOT EXISTS idx_incremental_state_table
         ON {self.state_table}(table_name);
         """
 
@@ -133,7 +133,7 @@ class IncrementalProcessor:
         """Update incremental state after processing"""
         try:
             upsert_sql = f"""
-            INSERT INTO {self.state_table} 
+            INSERT INTO {self.state_table}
                 (table_name, strategy, last_processed_timestamp,
                  last_processed_hash, last_processed_record_id,
                  processed_record_count, last_run_success, error_count,
@@ -336,7 +336,7 @@ class IncrementalProcessor:
         """Get comprehensive statistics about all incremental processes"""
         try:
             sql = f"""
-            SELECT 
+            SELECT
                 COUNT(*) as total_tables,
                 COUNT(CASE WHEN last_run_success THEN 1 END) as successful_runs,
                 COUNT(CASE WHEN NOT last_run_success THEN 1 END) as failed_runs,

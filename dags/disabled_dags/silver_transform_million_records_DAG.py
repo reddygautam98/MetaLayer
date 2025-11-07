@@ -35,8 +35,7 @@ def validate_silver_processing():
     else:
         print("❌ Silver layer validation FAILED!")
         raise ValueError(
-            f"Expected 1M+ records, got Sales: {sales_count}, Customers: {customers_count}"
-        )
+            f"Expected 1M+ records, got Sales: {sales_count}, Customers: {customers_count}")
 
 
 dag = DAG(
@@ -67,7 +66,7 @@ with dag:
             sale_year INTEGER GENERATED ALWAYS AS (EXTRACT(YEAR FROM sale_date)) STORED,
             sale_month INTEGER GENERATED ALWAYS AS (EXTRACT(MONTH FROM sale_date)) STORED,
             revenue_category VARCHAR(20) GENERATED ALWAYS AS (
-                CASE 
+                CASE
                     WHEN sale_amount >= 1000 THEN 'HIGH'
                     WHEN sale_amount >= 500 THEN 'MEDIUM'
                     ELSE 'LOW'
@@ -86,7 +85,7 @@ with dag:
         INSERT INTO silver.sales_cleaned_million (
             sales_id, product_id, customer_id, quantity, sale_date, sale_amount
         )
-        SELECT 
+        SELECT
             sales_id,
             product_id,
             customer_id,
@@ -94,8 +93,8 @@ with dag:
             sale_date,
             GREATEST(sale_amount, 0.01) as sale_amount
         FROM bronze.erp_sales_raw
-        WHERE sales_id IS NOT NULL 
-        AND product_id IS NOT NULL 
+        WHERE sales_id IS NOT NULL
+        AND product_id IS NOT NULL
         AND customer_id IS NOT NULL
         AND sale_date IS NOT NULL
         AND sale_amount > 0
@@ -112,7 +111,7 @@ with dag:
         INSERT INTO silver.customers_standardized_million (
             customer_id, customer_name_clean, email_clean, region_clean
         )
-        SELECT 
+        SELECT
             customer_id,
             TRIM(INITCAP(customer_name)) as customer_name_clean,
             LOWER(TRIM(email)) as email_clean,

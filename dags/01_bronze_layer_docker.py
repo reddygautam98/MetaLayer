@@ -16,6 +16,9 @@ Features:
 - Production-ready error handling and recovery
 """
 
+from utils.metrics_exporter import export_pipeline_metrics
+from utils.data_quality_monitoring import DataQualityValidator
+from utils.connection_pooling import get_db_connection
 import logging
 import os
 import sys
@@ -36,9 +39,6 @@ from airflow.utils.trigger_rule import TriggerRule
 
 # Add include path for utilities
 sys.path.append("/opt/airflow/include")
-from utils.connection_pooling import get_db_connection
-from utils.data_quality_monitoring import DataQualityValidator
-from utils.metrics_exporter import export_pipeline_metrics
 
 # =====================================================
 # CONFIGURATION & CONSTANTS
@@ -247,22 +247,6 @@ def ingest_crm_data(**context) -> Dict[str, Any]:
                     chunk["file_name"] = file_path.name
                     chunk["chunk_id"] = chunk_idx
 
-                    # Insert into Bronze layer
-                    insert_sql = """
-                        INSERT INTO bronze.customers_raw (
-                            customer_id, customer_name, email, phone, 
-                            address, created_date, source_system, 
-                            ingestion_timestamp, file_name, chunk_id
-                        ) 
-                        SELECT %(customer_id)s, %(customer_name)s, %(email)s, %(phone)s,
-                               %(address)s, %(created_date)s, %(source_system)s,
-                               %(ingestion_timestamp)s, %(file_name)s, %(chunk_id)s
-                        ON CONFLICT (customer_id, source_system) DO UPDATE SET
-                            customer_name = EXCLUDED.customer_name,
-                            email = EXCLUDED.email,
-                            ingestion_timestamp = EXCLUDED.ingestion_timestamp
-                    """
-
                     # Execute batch insert
                     records = chunk.to_dict("records")
                     hook.insert_rows(
@@ -316,8 +300,8 @@ def ingest_crm_data(**context) -> Dict[str, Any]:
         # Validate quality threshold
         if metrics["data_quality_score"] < QUALITY_THRESHOLD:
             raise DataQualityError(
-                f"Data quality score {metrics['data_quality_score']} below threshold {QUALITY_THRESHOLD}"
-            )
+                f"Data quality score {
+                    metrics['data_quality_score']} below threshold {QUALITY_THRESHOLD}")
 
         return metrics
 
@@ -431,8 +415,8 @@ def ingest_erp_data(**context) -> Dict[str, Any]:
         # Validate quality threshold
         if metrics["data_quality_score"] < QUALITY_THRESHOLD:
             raise DataQualityError(
-                f"Data quality score {metrics['data_quality_score']} below threshold {QUALITY_THRESHOLD}"
-            )
+                f"Data quality score {
+                    metrics['data_quality_score']} below threshold {QUALITY_THRESHOLD}")
 
         return metrics
 
@@ -467,12 +451,16 @@ def validate_bronze_layer(**context) -> Dict[str, Any]:
         issues_found = []
         if customers_validation.get("overall_status") != "PASSED":
             issues_found.append(
-                f"Customers table: {customers_validation.get('error', 'Quality checks failed')}"
-            )
+                f"Customers table: {
+                    customers_validation.get(
+                        'error',
+                        'Quality checks failed')}")
         if orders_validation.get("overall_status") != "PASSED":
             issues_found.append(
-                f"Orders table: {orders_validation.get('error', 'Quality checks failed')}"
-            )
+                f"Orders table: {
+                    orders_validation.get(
+                        'error',
+                        'Quality checks failed')}")
 
         validation_results = {
             "customers_validation": customers_validation,
@@ -483,8 +471,8 @@ def validate_bronze_layer(**context) -> Dict[str, Any]:
         }
 
         logger.info(
-            f"✅ Bronze layer validation completed: Quality Score = {overall_quality_score:.2%}"
-        )
+            f"✅ Bronze layer validation completed: Quality Score = {
+                overall_quality_score:.2%}")
 
         if issues_found:
             logger.warning(f"⚠️ Issues found: {issues_found}")
@@ -605,7 +593,7 @@ validate_source_task = PythonOperator(
     dag=dag,
     doc_md="""
     ## Validate Source Data
-    
+
     Validates the structure and availability of source data files:
     - Checks file existence and readability
     - Validates required columns presence
@@ -628,7 +616,7 @@ ingest_crm_task = PythonOperator(
     dag=dag,
     doc_md="""
     ## CRM Data Ingestion
-    
+
     Ingests customer data from CRM systems:
     - Processes CSV files in configurable chunks
     - Applies data cleaning and standardization
@@ -643,7 +631,7 @@ ingest_erp_task = PythonOperator(
     dag=dag,
     doc_md="""
     ## ERP Data Ingestion
-    
+
     Ingests order data from ERP systems:
     - Processes CSV files in configurable chunks
     - Applies data cleaning and validation
@@ -673,7 +661,7 @@ validate_bronze_task = PythonOperator(
     dag=dag,
     doc_md="""
     ## Bronze Layer Validation
-    
+
     Comprehensive validation of ingested data:
     - Record count validation
     - Data quality checks (nulls, duplicates, etc.)

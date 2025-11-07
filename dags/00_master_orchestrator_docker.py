@@ -17,6 +17,7 @@ Features:
 - Performance tracking and optimization
 """
 
+from utils.metrics_exporter import export_pipeline_metrics
 import json
 import logging
 
@@ -36,7 +37,6 @@ from airflow.sensors.external_task import ExternalTaskSensor
 from airflow.utils.trigger_rule import TriggerRule
 
 sys.path.append("/opt/airflow/include")
-from utils.metrics_exporter import export_pipeline_metrics
 
 # =====================================================
 # CONFIGURATION & CONSTANTS
@@ -103,7 +103,7 @@ def initialize_pipeline_run(**context) -> Dict[str, Any]:
 
             insert_query = """
                 INSERT INTO airflow_meta.pipeline_runs (
-                    dag_id, execution_date, pipeline_version, status, 
+                    dag_id, execution_date, pipeline_version, status,
                     metadata, start_time
                 ) VALUES (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT (dag_id, execution_date) DO UPDATE SET
@@ -273,8 +273,11 @@ def check_system_prerequisites(
                 )
 
     logger.info(
-        f"✅ Prerequisites check completed: {len(prerequisites['passed_checks'])} passed, {len(prerequisites['failed_checks'])} failed"
-    )
+        f"✅ Prerequisites check completed: {
+            len(
+                prerequisites['passed_checks'])} passed, {
+            len(
+                prerequisites['failed_checks'])} failed")
 
     return prerequisites
 
@@ -297,7 +300,7 @@ def monitor_layer_completion(layer_name: str, **context) -> Dict[str, Any]:
 
             # Get current pipeline metadata
             select_query = """
-                SELECT metadata FROM airflow_meta.pipeline_runs 
+                SELECT metadata FROM airflow_meta.pipeline_runs
                 WHERE dag_id = %s AND execution_date = %s
             """
 
@@ -316,7 +319,7 @@ def monitor_layer_completion(layer_name: str, **context) -> Dict[str, Any]:
 
                 # Update metadata
                 update_query = """
-                    UPDATE airflow_meta.pipeline_runs 
+                    UPDATE airflow_meta.pipeline_runs
                     SET metadata = %s, updated_time = %s
                     WHERE dag_id = %s AND execution_date = %s
                 """
@@ -353,18 +356,18 @@ def get_layer_metrics(
         # Get metrics from layer-specific tables
         if layer_name == "bronze":
             query = """
-                SELECT 
+                SELECT
                     COUNT(*) as records,
                     AVG(CASE WHEN validation_status = 'VALID' THEN 1.0 ELSE 0.0 END) as quality_score
-                FROM bronze.customers_raw 
+                FROM bronze.customers_raw
                 WHERE DATE(ingestion_timestamp) = %s
-                
+
                 UNION ALL
-                
-                SELECT 
+
+                SELECT
                     COUNT(*) as records,
                     AVG(CASE WHEN validation_status = 'VALID' THEN 1.0 ELSE 0.0 END) as quality_score
-                FROM bronze.orders_raw 
+                FROM bronze.orders_raw
                 WHERE DATE(ingestion_timestamp) = %s
             """
 
@@ -386,18 +389,18 @@ def get_layer_metrics(
 
         elif layer_name == "silver":
             query = """
-                SELECT 
+                SELECT
                     COUNT(*) as records,
                     AVG(data_quality_score) as quality_score
-                FROM silver.customers_cleaned 
+                FROM silver.customers_cleaned
                 WHERE DATE(processed_timestamp) = %s
-                
+
                 UNION ALL
-                
-                SELECT 
+
+                SELECT
                     COUNT(*) as records,
                     AVG(CASE WHEN is_valid THEN 1.0 ELSE 0.0 END) as quality_score
-                FROM silver.orders_cleaned 
+                FROM silver.orders_cleaned
                 WHERE DATE(processed_timestamp) = %s
             """
 
@@ -419,10 +422,10 @@ def get_layer_metrics(
 
         elif layer_name == "gold":
             query = f"""
-                SELECT 
+                SELECT
                     total_orders,
                     1.0 as quality_score  -- Assume high quality for gold layer
-                FROM gold.agg_daily_sales 
+                FROM gold.agg_daily_sales
                 WHERE date_key = {int(execution_date.strftime('%Y%m%d'))}
             """
 
@@ -453,7 +456,7 @@ def finalize_pipeline_run(**context) -> Dict[str, Any]:
 
             # Get pipeline metadata
             select_query = """
-                SELECT metadata, start_time FROM airflow_meta.pipeline_runs 
+                SELECT metadata, start_time FROM airflow_meta.pipeline_runs
                 WHERE dag_id = %s AND execution_date = %s
             """
 
@@ -493,8 +496,8 @@ def finalize_pipeline_run(**context) -> Dict[str, Any]:
 
             # Update final status
             update_query = """
-                UPDATE airflow_meta.pipeline_runs 
-                SET status = %s, end_time = %s, 
+                UPDATE airflow_meta.pipeline_runs
+                SET status = %s, end_time = %s,
                     total_duration_seconds = %s, total_records = %s,
                     quality_score = %s, sla_met = %s
                 WHERE dag_id = %s AND execution_date = %s
@@ -521,13 +524,14 @@ def finalize_pipeline_run(**context) -> Dict[str, Any]:
         # Generate alerts if needed
         if not final_summary["sla_met"]:
             logger.warning(
-                f"⚠️ SLA missed: {total_duration/60:.1f} minutes (SLA: {SLA_MINUTES} minutes)"
-            )
+                f"⚠️ SLA missed: {
+                    total_duration /
+                    60:.1f} minutes (SLA: {SLA_MINUTES} minutes)")
 
         if final_summary["overall_quality_score"] < 0.8:
             logger.warning(
-                f"⚠️ Quality score below threshold: {final_summary['overall_quality_score']:.2%}"
-            )
+                f"⚠️ Quality score below threshold: {
+                    final_summary['overall_quality_score']:.2%}")
 
         # Export final metrics
         export_pipeline_metrics("master_finalization", final_summary, execution_date)
@@ -542,9 +546,8 @@ def finalize_pipeline_run(**context) -> Dict[str, Any]:
             with hook.get_conn() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "UPDATE airflow_meta.pipeline_runs SET status = %s, end_time = %s WHERE dag_id = %s AND execution_date = %s",
-                    ["FAILED", datetime.now(), DAG_ID, execution_date],
-                )
+                    "UPDATE airflow_meta.pipeline_runs SET status = %s, end_time = %s WHERE dag_id = %s AND execution_date = %s", [
+                        "FAILED", datetime.now(), DAG_ID, execution_date], )
                 conn.commit()
         except Exception as update_error:
             logger.error(f"❌ Failed to update status: {str(update_error)}")
@@ -577,7 +580,7 @@ initialize_pipeline_task = PythonOperator(
     dag=dag,
     doc_md="""
     ## Initialize Pipeline
-    
+
     Initializes the ETL pipeline run:
     - Validates system prerequisites
     - Creates pipeline run metadata

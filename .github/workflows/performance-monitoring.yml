@@ -55,8 +55,13 @@ jobs:
       - name: 📦 Install Monitoring Tools
         run: |
           pip install requests psycopg2-binary pandas prometheus-client
-          pip install apache-airflow[postgres]==2.8.1
-          pip install Flask-Session>=0.4.0
+          # Install Airflow with PostgreSQL provider and compatible constraints
+          AIRFLOW_VERSION=2.8.1
+          PYTHON_VERSION="$(python --version | cut -d " " -f 2 | cut -d "." -f 1-2)"
+          CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt"
+          pip install "apache-airflow[postgres]==${AIRFLOW_VERSION}" --constraint "${CONSTRAINT_URL}"
+          # Ensure Flask-Session is compatible with Airflow
+          pip install "Flask-Session>=0.4.0,<1.0.0"
 
       - name: 🕐 Wait for PostgreSQL to be ready
         run: |
@@ -68,7 +73,40 @@ jobs:
             sleep 2
           done
 
-      - name: 🚀 Initialize and Start Airflow
+      - name: � Verify Flask-Session Compatibility
+        run: |
+          # Test Flask-Session import and availability
+          python -c "
+          try:
+              import flask_session
+              print('✅ flask_session module imported successfully')
+              
+              # Check if sessions submodule exists (newer versions)
+              try:
+                  from flask_session.sessions import SqlAlchemySessionInterface
+                  print('✅ SqlAlchemySessionInterface imported from flask_session.sessions')
+              except ImportError:
+                  # Try alternative import path (older versions)
+                  try:
+                      from flask_session import SqlAlchemySessionInterface
+                      print('✅ SqlAlchemySessionInterface imported from flask_session')
+                  except ImportError:
+                      print('⚠️  SqlAlchemySessionInterface not found, checking Flask-Session version...')
+                      import pkg_resources
+                      version = pkg_resources.get_distribution('Flask-Session').version
+                      print(f'Flask-Session version: {version}')
+                      raise
+              
+              # Test basic Airflow import
+              import airflow
+              print(f'✅ Airflow version: {airflow.__version__}')
+              
+          except Exception as e:
+              print(f'❌ Import test failed: {e}')
+              raise
+          "
+
+      - name: �🚀 Initialize and Start Airflow
         run: |
           # Initialize Airflow database
           airflow db init

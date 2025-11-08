@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import pandas as pd
+import psycopg2.extras
 from airflow import DAG
 from airflow.exceptions import AirflowException
 from airflow.models import Variable
@@ -105,7 +106,13 @@ def validate_source_data(**context) -> Dict[str, Any]:  # noqa: C901
                 for file_path in crm_files:
                     try:
                         df = pd.read_csv(file_path, nrows=1000)  # Sample validation
-                        required_cols = ["customer_id", "customer_name", "email"]
+                        
+                        # Handle different CRM file structures
+                        if "customer_name" in df.columns:
+                            required_cols = ["customer_id", "customer_name", "email"]
+                        else:
+                            required_cols = ["customer_id", "first_name", "email"]
+                        
                         missing_cols = set(required_cols) - set(df.columns)
 
                         if not missing_cols:
@@ -128,12 +135,11 @@ def validate_source_data(**context) -> Dict[str, Any]:  # noqa: C901
                 for file_path in erp_files:
                     try:
                         df = pd.read_csv(file_path, nrows=1000)
-                        required_cols = [
-                            "order_id",
-                            "customer_id",
-                            "product_id",
-                            "order_date",
-                        ]
+                        # Handle different ERP file structures
+                        if "sales" in file_path.name.lower():
+                            required_cols = ["sales_id", "customer_id", "product_id", "sale_date"]
+                        else:  # orders file
+                            required_cols = ["order_id", "customer_id", "product_code", "order_date"]
                         missing_cols = set(required_cols) - set(df.columns)
 
                         if not missing_cols:
@@ -171,7 +177,7 @@ def validate_source_data(**context) -> Dict[str, Any]:  # noqa: C901
         raise
 
 
-def determine_processing_branch(**context) -> str:
+def determine_processing_branch(**context):
     """Determine which processing branch to take based on validation results"""
 
     validation_results = context["task_instance"].xcom_pull(
@@ -189,10 +195,16 @@ def determine_processing_branch(**context) -> str:
 
     if len(valid_sources) >= 2:
         logger.info(f"✅ Multiple valid sources found: {valid_sources}")
-        return "parallel_ingestion"
+        # For multiple sources, trigger CRM ingestion (which will also handle ERP via dependencies)
+        return "ingest_crm_data"
     elif len(valid_sources) == 1:
         logger.info(f"⚠️ Single valid source found: {valid_sources[0]}")
-        return "single_source_ingestion"
+        if "crm_data" in valid_sources:
+            return "ingest_crm_data"
+        elif "erp_data" in valid_sources:
+            return "ingest_erp_data" 
+        else:
+            return "single_source_ingestion"
     else:
         logger.warning("❌ No valid sources found")
         return "skip_processing"
@@ -231,38 +243,113 @@ def ingest_crm_data(**context) -> Dict[str, Any]:
 
             for chunk_idx, chunk in enumerate(chunk_iter):
                 try:
-                    # Data cleaning and standardization
-                    chunk = chunk.dropna(subset=["customer_id", "customer_name"])
+                    # Handle different CRM file structures
+                    if "customer_name" in chunk.columns:
+                        # File already has customer_name (crm_customers.csv)
+                        chunk = chunk.dropna(subset=["customer_id", "customer_name"])
+                    else:
+                        # File has first_name, last_name (customers.csv)
+                        chunk = chunk.dropna(subset=["customer_id", "first_name"])
+                        # Create customer_name from first_name and last_name
+                        chunk["last_name"] = chunk["last_name"].fillna("")  # Fill NaN with empty string
+                        chunk["customer_name"] = (chunk["first_name"].astype(str) + " " + chunk["last_name"].astype(str)).str.strip()
+                    
                     chunk["customer_id"] = pd.to_numeric(
                         chunk["customer_id"], errors="coerce"
                     )
                     chunk = chunk.dropna(subset=["customer_id"])
 
+                    # Ensure all required columns exist with defaults for missing ones
+                    required_columns = ["phone", "address", "created_date"]
+                    for col in required_columns:
+                        if col not in chunk.columns:
+                            chunk[col] = None
+                    
                     # Add metadata columns
                     chunk["source_system"] = "CRM"
                     chunk["ingestion_timestamp"] = datetime.now()
-                    chunk["file_name"] = file_path.name
-                    chunk["chunk_id"] = chunk_idx
+                    chunk["source_file_path"] = str(file_path)
+                    chunk["source_row_number"] = chunk_idx
+
+                    # Convert all columns to simple data types to avoid pandas object issues
+                    logger.info(f"🔍 Chunk columns: {list(chunk.columns)}")
+                    logger.info(f"🔍 Chunk dtypes: {chunk.dtypes.to_dict()}")
+                    
+                    for col in chunk.columns:
+                        if chunk[col].dtype == 'object':
+                            chunk[col] = chunk[col].astype(str)
+                        elif pd.api.types.is_numeric_dtype(chunk[col]):
+                            chunk[col] = chunk[col].fillna(0)
+
+                    # Ensure all values are basic Python types, not pandas objects
+                    chunk = chunk.where(pd.notnull(chunk), None)
+                    
+                    # Convert pandas Timestamp objects to Python datetime strings
+                    for col in chunk.columns:
+                        if chunk[col].dtype.name.startswith('datetime'):
+                            chunk[col] = chunk[col].dt.strftime('%Y-%m-%d %H:%M:%S')
+                    
+                    logger.info(f"🔍 Sample record: {chunk.iloc[0].to_dict() if len(chunk) > 0 else 'Empty chunk'}")
 
                     # Execute batch insert
                     records = chunk.to_dict("records")
-                    hook.insert_rows(
-                        table="bronze.customers_raw",
-                        rows=records,
-                        target_fields=[
-                            "customer_id",
-                            "customer_name",
-                            "email",
-                            "phone",
-                            "address",
-                            "created_date",
-                            "source_system",
-                            "ingestion_timestamp",
-                            "file_name",
-                            "chunk_id",
-                        ],
-                        replace=True,
-                    )
+                    
+                    # Final safety check - convert any remaining objects to strings
+                    for record in records:
+                        for key, value in record.items():
+                            if hasattr(value, '__class__') and 'pandas' in str(value.__class__):
+                                record[key] = str(value)
+                    
+                    # Additional debugging - check the actual data being inserted
+                    if records:
+                        first_record = records[0]
+                        logger.info(f"🔍 First record after conversion: {first_record}")
+                        for key, value in first_record.items():
+                            logger.info(f"🔍 {key}: {type(value)} = {repr(value)}")
+                    
+                    # Convert records to list of tuples for insert_rows
+                    field_order = [
+                        "customer_id",
+                        "customer_name", 
+                        "email",
+                        "region",
+                        "phone",
+                        "address",
+                        "created_date",
+                        "source_system",
+                        "ingestion_timestamp",
+                        "source_file_path",
+                        "source_row_number",
+                    ]
+                    
+                    # Use direct SQL insertion with proper string escaping
+                    columns = ', '.join(field_order)
+                    placeholders = ', '.join(['%s'] * len(field_order))
+                    insert_sql = f"""
+                        INSERT INTO bronze.customers_raw ({columns})
+                        VALUES ({placeholders})
+                    """
+                    
+                    # Convert to list of tuples with proper type conversion
+                    row_tuples = []
+                    for record in records:
+                        row = []
+                        for field in field_order:
+                            value = record.get(field)
+                            # Convert all values to basic Python types
+                            if value is None:
+                                row.append(None)
+                            elif isinstance(value, (str, int, float, bool)):
+                                row.append(value)
+                            else:
+                                row.append(str(value))  # Convert everything else to string
+                        row_tuples.append(tuple(row))
+                    
+                    # Insert using executemany for better control
+                    with hook.get_conn() as connection:
+                        with connection.cursor() as cursor:
+                            cursor.executemany(insert_sql, row_tuples)
+                            connection.commit()
 
                     metrics["records_processed"] += len(chunk)
                     metrics["records_inserted"] += len(records)
@@ -340,44 +427,129 @@ def ingest_erp_data(**context) -> Dict[str, Any]:
 
             for chunk_idx, chunk in enumerate(chunk_iter):
                 try:
-                    # Data cleaning and standardization
-                    chunk = chunk.dropna(
-                        subset=["order_id", "customer_id", "product_id"]
-                    )
-                    chunk["order_id"] = pd.to_numeric(
-                        chunk["order_id"], errors="coerce"
-                    )
-                    chunk["customer_id"] = pd.to_numeric(
-                        chunk["customer_id"], errors="coerce"
-                    )
-                    chunk = chunk.dropna(subset=["order_id", "customer_id"])
+                    # Handle different ERP file structures
+                    if "sales" in file_path.name.lower():
+                        # ERP Sales file processing for bronze.sales_raw
+                        chunk = chunk.dropna(subset=["sales_id", "customer_id", "product_id"])
+                        
+                        # Convert data types
+                        chunk["sales_id"] = pd.to_numeric(chunk["sales_id"], errors="coerce")
+                        chunk["customer_id"] = pd.to_numeric(chunk["customer_id"], errors="coerce")
+                        chunk["product_id"] = pd.to_numeric(chunk["product_id"], errors="coerce")
+                        chunk["quantity"] = pd.to_numeric(chunk["quantity"], errors="coerce")
+                        
+                        # Clean and prepare data
+                        chunk = chunk.dropna(subset=["sales_id", "customer_id", "product_id"])
+                        
+                        # Add metadata columns
+                        chunk["source_system"] = "ERP"
+                        chunk["ingestion_timestamp"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        chunk["source_file_path"] = str(file_path)
+                        chunk["source_row_number"] = list(range(len(chunk)))
+                        
+                        # Convert to string for consistency
+                        chunk["sale_date"] = chunk["sale_date"].astype(str)
+                        chunk["sale_amount"] = chunk["sale_amount"].astype(str)
 
-                    # Add metadata columns
-                    chunk["source_system"] = "ERP"
-                    chunk["ingestion_timestamp"] = datetime.now()
-                    chunk["file_name"] = file_path.name
-                    chunk["chunk_id"] = chunk_idx
+                        # Insert into Bronze sales table using direct SQL
+                        records = chunk.to_dict("records")
+                        logger.info(f"🔍 Sales records sample: {records[:2] if records else 'No records'}")
+                        
+                        # Prepare SQL insert
+                        insert_query = """
+                            INSERT INTO bronze.sales_raw 
+                            (sales_id, product_id, customer_id, quantity, sale_date, sale_amount, 
+                             source_system, ingestion_timestamp, source_file_path, source_row_number)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """
+                        
+                        # Convert records to tuples
+                        values_list = [
+                            (
+                                record["sales_id"],
+                                record["product_id"],
+                                record["customer_id"],
+                                record["quantity"],
+                                record["sale_date"],
+                                record["sale_amount"],
+                                record["source_system"],
+                                record["ingestion_timestamp"],
+                                record["source_file_path"],
+                                record["source_row_number"]
+                            )
+                            for record in records
+                        ]
+                        
+                        # Execute bulk insert
+                        cursor = hook.get_cursor()
+                        try:
+                            psycopg2.extras.execute_batch(cursor, insert_query, values_list, page_size=1000)
+                            hook.get_conn().commit()
+                        except Exception as e:
+                            hook.get_conn().rollback()
+                            raise e
+                        finally:
+                            cursor.close()
+                    else:
+                        # Orders file processing for bronze.orders_raw
+                        chunk = chunk.dropna(subset=["order_id", "customer_id", "product_code"])
+                        
+                        # Map and clean data
+                        chunk["product_id"] = chunk["product_code"]
+                        chunk["price"] = pd.to_numeric(chunk["price_per_unit"], errors="coerce")
+                        chunk["quantity"] = pd.to_numeric(chunk["quantity"], errors="coerce") 
+                        chunk["total_amount"] = chunk["price"] * chunk["quantity"]
+                        
+                        # Convert data types and clean
+                        chunk = chunk.dropna(subset=["order_id", "customer_id"])
+                        
+                        # Add metadata columns
+                        chunk["source_system"] = "ERP"
+                        chunk["source_file_path"] = str(file_path)
+                        chunk["source_row_number"] = list(range(len(chunk)))
+                        
+                        # Convert to string for consistency
+                        chunk["order_date"] = chunk["order_date"].astype(str)
 
-                    # Insert into Bronze layer
-                    records = chunk.to_dict("records")
-                    hook.insert_rows(
-                        table="bronze.orders_raw",
-                        rows=records,
-                        target_fields=[
-                            "order_id",
-                            "customer_id",
-                            "product_id",
-                            "order_date",
-                            "quantity",
-                            "price",
-                            "total_amount",
-                            "source_system",
-                            "ingestion_timestamp",
-                            "file_name",
-                            "chunk_id",
-                        ],
-                        replace=True,
-                    )
+                        # Insert into Bronze orders table using direct SQL
+                        records = chunk.to_dict("records")
+                        logger.info(f"🔍 Orders records sample: {records[:2] if records else 'No records'}")
+                        
+                        # Prepare SQL insert
+                        insert_query = """
+                            INSERT INTO bronze.orders_raw 
+                            (order_id, customer_id, product_id, order_date, quantity, price, total_amount, 
+                             source_system, source_file_path, source_row_number)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """
+                        
+                        # Convert records to tuples
+                        values_list = [
+                            (
+                                record["order_id"],
+                                record["customer_id"],
+                                record["product_id"],
+                                record["order_date"],
+                                record["quantity"],
+                                record["price"],
+                                record["total_amount"],
+                                record["source_system"],
+                                record["source_file_path"],
+                                record["source_row_number"]
+                            )
+                            for record in records
+                        ]
+                        
+                        # Execute bulk insert
+                        cursor = hook.get_cursor()
+                        try:
+                            psycopg2.extras.execute_batch(cursor, insert_query, values_list, page_size=1000)
+                            hook.get_conn().commit()
+                        except Exception as e:
+                            hook.get_conn().rollback()
+                            raise e
+                        finally:
+                            cursor.close()
 
                     metrics["records_processed"] += len(chunk)
                     metrics["records_inserted"] += len(records)
@@ -686,7 +858,8 @@ end_task = DummyOperator(
 start_task >> validate_source_task >> branch_task
 
 # Branching paths
-branch_task >> [ingest_crm_task, ingest_erp_task] >> parallel_join_task
+branch_task >> ingest_crm_task >> parallel_join_task
+branch_task >> ingest_erp_task >> parallel_join_task  
 branch_task >> single_source_task >> parallel_join_task
 branch_task >> skip_task >> end_task
 

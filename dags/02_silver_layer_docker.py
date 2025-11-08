@@ -23,6 +23,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict
 
 import pandas as pd
+import psycopg2.extras
 from airflow import DAG
 from airflow.exceptions import AirflowException
 from airflow.models import Variable
@@ -181,27 +182,41 @@ def transform_customers_bronze_to_silver(**context) -> Dict[str, Any]:
 
         start_time = datetime.now()
 
-        # Get incremental data from Bronze layer
+        # Get incremental data from Bronze layer (deduplicated)
         incremental_query = """
-            SELECT DISTINCT
+            WITH ranked_customers AS (
+                SELECT 
+                    customer_id, customer_name, email, phone, address,
+                    created_date, source_system, ingestion_timestamp,
+                    ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY ingestion_timestamp DESC) as rn
+                FROM bronze.customers_raw
+                WHERE DATE(ingestion_timestamp) = %s
+                AND customer_id IS NOT NULL
+            )
+            SELECT 
                 customer_id, customer_name, email, phone, address,
                 created_date, source_system, ingestion_timestamp
-            FROM bronze.customers_raw
-            WHERE DATE(ingestion_timestamp) = %s
-            AND customer_id IS NOT NULL
-            ORDER BY customer_id, ingestion_timestamp DESC
+            FROM ranked_customers
+            WHERE rn = 1
+            ORDER BY customer_id
         """
 
-        # Execute query and get data in chunks
+        # Execute query and get data
         with hook.get_conn() as conn:
             cursor = conn.cursor()
             cursor.execute(incremental_query, [execution_date.date()])
-
-            # Process in batches
-            while True:
-                rows = cursor.fetchmany(BATCH_SIZE)
-                if not rows:
-                    break
+            
+            # Fetch all rows for this date (should be reasonable size after deduplication)
+            rows = cursor.fetchall()
+            cursor.close()
+            
+            if not rows:
+                logger.info("No customer data found for processing")
+                return metrics
+            
+            # Process in batches to avoid memory issues
+            for i in range(0, len(rows), BATCH_SIZE):
+                batch_rows = rows[i:i + BATCH_SIZE]
 
                 # Convert to DataFrame
                 columns = [
@@ -214,7 +229,7 @@ def transform_customers_bronze_to_silver(**context) -> Dict[str, Any]:
                     "source_system",
                     "ingestion_timestamp",
                 ]
-                df = pd.DataFrame(rows, columns=columns)
+                df = pd.DataFrame(batch_rows, columns=columns)
 
                 metrics["records_read"] += len(df)
 
@@ -259,30 +274,41 @@ def transform_customers_bronze_to_silver(**context) -> Dict[str, Any]:
                         "processed_timestamp",
                     ]
 
+                    # Handle NaT values and convert timestamps to strings for database insertion
+                    df_final["created_date"] = df_final["created_date"].fillna('1900-01-01')
+                    df_final["processed_timestamp"] = df_final["processed_timestamp"].astype(str)
+
                     # Insert into Silver layer with upsert logic
                     if not df_final.empty:
-                        upsert_query = """
-                            INSERT INTO silver.customers_cleaned (
-                                customer_id, customer_name, email, phone, address,
-                                created_date, is_active, data_quality_score, processed_timestamp
-                            ) VALUES %s
-                            ON CONFLICT (customer_id) DO UPDATE SET
-                                customer_name = EXCLUDED.customer_name,
-                                email = EXCLUDED.email,
-                                phone = EXCLUDED.phone,
-                                address = EXCLUDED.address,
-                                is_active = EXCLUDED.is_active,
-                                data_quality_score = EXCLUDED.data_quality_score,
-                                processed_timestamp = EXCLUDED.processed_timestamp
-                        """
+                        # Create a new cursor for insert operations
+                        insert_cursor = conn.cursor()
+                        try:
+                            upsert_query = """
+                                INSERT INTO silver.customers_cleaned (
+                                    customer_id, customer_name, email, phone, address,
+                                    created_date, is_active, data_quality_score, processed_timestamp
+                                ) VALUES %s
+                                ON CONFLICT (customer_id) DO UPDATE SET
+                                    customer_name = EXCLUDED.customer_name,
+                                    email = EXCLUDED.email,
+                                    phone = EXCLUDED.phone,
+                                    address = EXCLUDED.address,
+                                    is_active = EXCLUDED.is_active,
+                                    data_quality_score = EXCLUDED.data_quality_score,
+                                    processed_timestamp = EXCLUDED.processed_timestamp
+                            """
 
-                        records = [
-                            tuple(row) for row in df_final.itertuples(index=False)
-                        ]
-                        cursor.execute(upsert_query, records)
-                        conn.commit()
+                            records = [
+                                tuple(row) for row in df_final.itertuples(index=False)
+                            ]
+                            psycopg2.extras.execute_values(
+                                insert_cursor, upsert_query, records, template=None, page_size=1000
+                            )
+                            conn.commit()
 
-                        metrics["records_loaded"] += len(df_final)
+                            metrics["records_loaded"] += len(df_final)
+                        finally:
+                            insert_cursor.close()
 
                     metrics["records_transformed"] += len(df_transformed)
 

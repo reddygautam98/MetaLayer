@@ -1,0 +1,17 @@
+# =====================================================
+# GRAFANA DATASOURCES PROVISIONING CONFIGURATION
+# Automatic setup configuration for data sources
+# =====================================================
+
+apiVersion: 1
+
+providers:
+  - name: 'ETL Data Sources'
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 10
+    options:
+      path: /etc/grafana/provisioning/datasources

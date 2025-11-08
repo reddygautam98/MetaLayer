@@ -1,0 +1,55 @@
+# =====================================================
+# GRAFANA DATA SOURCES PROVISIONING
+# Automatic setup of Prometheus and PostgreSQL data sources
+# =====================================================
+
+apiVersion: 1
+
+datasources:
+  # Prometheus data source for metrics
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    uid: prometheus
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: 15s
+      queryTimeout: 60s
+      httpMethod: POST
+    version: 1
+
+  # PostgreSQL data source for database queries
+  - name: PostgreSQL
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    uid: postgres
+    database: etl_pipeline_2024
+    user: ${POSTGRES_USER:-airflow}
+    editable: true
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1500
+      timescaledb: false
+    secureJsonData:
+      password: ${POSTGRES_PASSWORD:-airflow}
+    version: 1
+
+  # PostgreSQL Airflow database
+  - name: Airflow DB
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    uid: airflow-db
+    database: airflow
+    user: ${POSTGRES_USER:-airflow}
+    editable: true
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1500
+      timescaledb: false
+    secureJsonData:
+      password: ${POSTGRES_PASSWORD:-airflow}
+    version: 1

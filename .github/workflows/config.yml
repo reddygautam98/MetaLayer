@@ -1,0 +1,74 @@
+name: Reusable Airflow Setup
+
+on:
+  workflow_call:
+    inputs:
+      install_airflow:
+        description: 'Install Airflow with PostgreSQL provider'
+        required: false
+        default: true
+        type: boolean
+      install_testing_tools:
+        description: 'Install testing and quality tools'
+        required: false  
+        default: false
+        type: boolean
+
+env:
+  # =================================================================
+  # STANDARDIZED VERSIONS (PREVENT INCONSISTENCIES)
+  # =================================================================
+  PYTHON_VERSION: '3.11'
+  AIRFLOW_VERSION: '2.8.1'  # Unified across all workflows
+  
+  # =================================================================  
+  # DATABASE CONFIGURATION (STANDARDIZED)
+  # =================================================================
+  POSTGRES_USER: airflow
+  POSTGRES_PASSWORD: airflow
+  POSTGRES_DB: airflow
+  POSTGRES_HOST: localhost  
+  POSTGRES_PORT: 5432
+  
+  # =================================================================
+  # DEPENDENCY VERSIONS (COMPATIBILITY TESTED)
+  # =================================================================
+  FLASK_SESSION_VERSION: '>=0.4.0,<1.0.0'
+  PSYCOPG2_VERSION: '2.9.7'
+
+  # =================================================================
+  # AIRFLOW CONFIGURATION
+  # =================================================================
+  AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql://airflow:airflow@localhost:5432/airflow
+  AIRFLOW__CORE__LOAD_EXAMPLES: false
+  AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: true
+
+jobs:
+  setup-dependencies:
+    name: 📦 Setup Python & Airflow Dependencies
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          
+      - name: 📦 Install Base Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests psycopg2-binary==${{ env.PSYCOPG2_VERSION }}
+          
+      - name: 🛩️ Install Airflow with Constraints
+        if: ${{ inputs.install_airflow }}
+        run: |
+          # Use official Airflow constraints for compatibility
+          CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-${{ env.AIRFLOW_VERSION }}/constraints-${{ env.PYTHON_VERSION }}.txt"
+          pip install "apache-airflow[postgres]==${{ env.AIRFLOW_VERSION }}" --constraint "${CONSTRAINT_URL}"
+          pip install "Flask-Session${{ env.FLASK_SESSION_VERSION }}"
+          
+      - name: 🧪 Install Testing & Quality Tools  
+        if: ${{ inputs.install_testing_tools }}
+        run: |
+          pip install black isort flake8 pylint mypy coverage pytest pytest-cov
+          pip install bandit safety semgrep

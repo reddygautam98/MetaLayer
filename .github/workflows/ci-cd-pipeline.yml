@@ -33,7 +33,7 @@ permissions:
 
 env:
   PYTHON_VERSION: '3.11'
-  AIRFLOW_VERSION: '2.10.2'
+  AIRFLOW_VERSION: '2.8.1'  # STANDARDIZED: downgraded for compatibility with existing codebase
   POSTGRES_VERSION: '15'
 
 jobs:

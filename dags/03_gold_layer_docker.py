@@ -69,6 +69,9 @@ default_args = {
 def build_customer_dimension(**context) -> Dict[str, Any]:
     """Build customer dimension table with SCD Type 2"""
     execution_date = context["execution_date"]
+    
+    # Convert Airflow execution_date (Pendulum) to Python datetime for PostgreSQL compatibility
+    execution_datetime = datetime.fromisoformat(str(execution_date).replace('+00:00', ''))
 
     logger.info(f"🏗️ Building customer dimension for {execution_date}")
 
@@ -104,7 +107,7 @@ def build_customer_dimension(**context) -> Dict[str, Any]:
                 ORDER BY customer_id, processed_timestamp DESC
             """
 
-            cursor.execute(silver_query, [execution_date.date(), LOOKBACK_DAYS])
+            cursor.execute(silver_query, [execution_datetime.date(), LOOKBACK_DAYS])
             silver_data = cursor.fetchall()
 
             if not silver_data:
@@ -180,7 +183,7 @@ def build_customer_dimension(**context) -> Dict[str, Any]:
                             silver_row["address"],
                             silver_row["is_active"],
                             silver_row["data_quality_score"],
-                            execution_date,
+                            execution_datetime,
                             datetime(9999, 12, 31),
                             True,
                         ],
@@ -208,7 +211,7 @@ def build_customer_dimension(**context) -> Dict[str, Any]:
                             WHERE customer_key = %s
                         """
                         cursor.execute(
-                            update_query, [execution_date, current["customer_key"]]
+                            update_query, [execution_datetime, current["customer_key"]]
                         )
 
                         # Insert new record
@@ -229,7 +232,7 @@ def build_customer_dimension(**context) -> Dict[str, Any]:
                                 silver_row["address"],
                                 silver_row["is_active"],
                                 silver_row["data_quality_score"],
-                                execution_date,
+                                execution_datetime,
                                 datetime(9999, 12, 31),
                                 True,
                             ],
@@ -261,6 +264,9 @@ def build_customer_dimension(**context) -> Dict[str, Any]:
 def build_order_fact_table(**context) -> Dict[str, Any]:
     """Build order fact table with aggregations"""
     execution_date = context["execution_date"]
+    
+    # Convert Airflow execution_date (Pendulum) to Python datetime for PostgreSQL compatibility
+    execution_datetime = datetime.fromisoformat(str(execution_date).replace('+00:00', ''))
 
     logger.info(f"📊 Building order fact table for {execution_date}")
 
@@ -305,7 +311,7 @@ def build_order_fact_table(**context) -> Dict[str, Any]:
                     total_amount = EXCLUDED.total_amount
             """
 
-            cursor.execute(fact_insert_query, [execution_date.date()])
+            cursor.execute(fact_insert_query, [execution_datetime.date()])
             metrics["fact_records_created"] = cursor.rowcount
 
             # Create daily aggregations
@@ -332,7 +338,7 @@ def build_order_fact_table(**context) -> Dict[str, Any]:
                     total_quantity = EXCLUDED.total_quantity
             """
 
-            cursor.execute(daily_agg_query, [execution_date.date()])
+            cursor.execute(daily_agg_query, [execution_datetime.date()])
             metrics["daily_aggregations"] = cursor.rowcount
 
             # Create monthly aggregations
@@ -363,10 +369,10 @@ def build_order_fact_table(**context) -> Dict[str, Any]:
             cursor.execute(
                 monthly_agg_query,
                 [
-                    execution_date.date(),
-                    execution_date.date(),
-                    execution_date.date(),
-                    execution_date.date(),
+                    execution_datetime.date(),
+                    execution_datetime.date(),
+                    execution_datetime.date(),
+                    execution_datetime.date(),
                 ],
             )
             metrics["monthly_aggregations"] = cursor.rowcount

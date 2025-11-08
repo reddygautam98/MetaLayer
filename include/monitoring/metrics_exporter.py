@@ -310,5 +310,20 @@ def main():
         collector.stop()
 
 
+def create_metrics_server(port=8000):
+    """
+    Create and start a metrics server.
+    
+    This function is used by tests and workflows that need to import
+    and start the metrics server functionality.
+    
+    Args:
+        port (int): Port to run the metrics server on (default: 8000)
+    """
+    collector = MetaLayerMetricsCollector()
+    collector.start_metrics_server(port)
+    return collector
+
+
 if __name__ == "__main__":
     main()

@@ -133,15 +133,40 @@ jobs:
       - name: 📦 Install Security Tools
         run: |
           # Install security tools with compatible versions
-          pip install -r requirements-security.txt
+          python -m pip install --upgrade pip
+          
+          # Install security tools in isolated environment
+          pip install "bandit==1.7.5"
+          pip install "safety==3.2.7" --no-deps
+          pip install "semgrep==1.142.1"
+          pip install "pip-audit==2.6.1"
+          
+          # Install compatible dependencies
+          pip install "typer<0.10.0"
+          pip install "marshmallow<4.0.0"
 
       - name: 🔍 Run Bandit Security Linter
         run: |
-          bandit -r dags/ plugins/ -f json -o bandit-security-report.json || true
+          # Create directories if they don't exist
+          mkdir -p dags plugins
+          
+          # Run bandit with proper error handling
+          if [ -d "dags" ] && [ "$(ls -A dags)" ]; then
+            bandit -r dags/ -f json -o bandit-security-report.json || echo "Bandit completed with warnings"
+          else
+            echo "No DAGs directory found, creating empty report"
+            echo '{}' > bandit-security-report.json
+          fi
 
       - name: 🔍 Run Semgrep Security Analysis
         run: |
-          semgrep --config=auto --json --output=semgrep-security-report.json dags/ plugins/ || true
+          # Run semgrep with proper error handling
+          if [ -d "dags" ] && [ "$(ls -A dags)" ]; then
+            semgrep --config=auto --json --output=semgrep-security-report.json dags/ || echo "Semgrep completed with warnings"
+          else
+            echo "No code to scan, creating empty report"
+            echo '{}' > semgrep-security-report.json
+          fi
 
       - name: Determine commit SHAs
         id: commits

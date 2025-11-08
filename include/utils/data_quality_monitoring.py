@@ -33,6 +33,7 @@ import pandas as pd
 # Database imports - moved to top level for better error handling
 try:
     from psycopg2 import sql
+
     PSYCOPG2_AVAILABLE = True
 except ImportError as e:
     logging.warning("psycopg2 not available. Some database operations may fail: %s", e)
@@ -115,7 +116,7 @@ class DataQualityMonitor:
 
     def _validate_table_name(self, table_name: str) -> str:
         """Validate table name to prevent SQL injection"""
-        if not re.match(r'^[A-Za-z_][A-Za-z0-9_.]*$', table_name):
+        if not re.match(r"^[A-Za-z_][A-Za-z0-9_.]*$", table_name):
             raise ValueError(f"Invalid table name: {table_name!r}")
         return table_name
 
@@ -357,7 +358,10 @@ class DataQualityMonitor:
             }
 
             logger.info(
-                "Created expectation suite for %s.%s: %s", schema_name, table_name, suite_info
+                "Created expectation suite for %s.%s: %s",
+                schema_name,
+                table_name,
+                suite_info,
             )
             return suite_info
 
@@ -533,7 +537,7 @@ class DataQualityMonitor:
             validated_full_table = self._validate_table_name(full_table_name)
             primary_key = self._get_primary_key(schema_name, table_name)
             validated_primary_key = self._validate_table_name(primary_key)
-            
+
             checks = [
                 (
                     "row_count",
@@ -737,9 +741,10 @@ class DataQualityMonitor:
             # Failed metrics breakdown
             # Validate table name to prevent SQL injection
             validated_metrics_table = self._validate_table_name(self.metrics_table)
-            
+
             if PSYCOPG2_AVAILABLE:
-                failed_metrics_query = sql.SQL("""
+                failed_metrics_query = sql.SQL(
+                    """
                 SELECT
                     metric_name,
                     table_name,
@@ -750,11 +755,14 @@ class DataQualityMonitor:
                 GROUP BY metric_name, table_name
                 ORDER BY failure_count DESC
                 LIMIT 10
-                """).format(metrics_table=sql.Identifier(*validated_metrics_table.split('.')))
-                
+                """
+                ).format(
+                    metrics_table=sql.Identifier(*validated_metrics_table.split("."))
+                )
+
                 failed_metrics = self.hook.get_records(
-                    failed_metrics_query.as_string(self.hook.get_conn()), 
-                    parameters=('fail', cutoff_date)
+                    failed_metrics_query.as_string(self.hook.get_conn()),
+                    parameters=("fail", cutoff_date),
                 )
             else:
                 # Fallback for when psycopg2 is not available - use validated table name
@@ -771,7 +779,7 @@ class DataQualityMonitor:
                 LIMIT 10
                 """
                 failed_metrics = self.hook.get_records(
-                    failed_metrics_query, parameters=('fail', cutoff_date)
+                    failed_metrics_query, parameters=("fail", cutoff_date)
                 )
 
             return {
@@ -835,11 +843,11 @@ def basic_data_quality_check(
 
     try:
         # Validate table and schema names to prevent SQL injection
-        if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', schema_name):
+        if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", schema_name):
             raise ValueError(f"Invalid schema name: {schema_name!r}")
-        if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', table_name):
+        if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", table_name):
             raise ValueError(f"Invalid table name: {table_name!r}")
-            
+
         full_table_name = f"{schema_name}.{table_name}"
 
         # Basic metrics - safe indexing with validated table name
@@ -856,7 +864,9 @@ def basic_data_quality_check(
         WHERE table_schema = %s AND table_name = %s
         ORDER BY ordinal_position
         """
-        columns = hook.get_records(columns_query, parameters=(schema_name, table_name)) or []
+        columns = (
+            hook.get_records(columns_query, parameters=(schema_name, table_name)) or []
+        )
 
         metrics = []
         issues = []
@@ -864,10 +874,10 @@ def basic_data_quality_check(
         for column_name, data_type, is_nullable in columns:
             # Check for null values - validate column name to prevent SQL injection
             validated_column_name = column_name
-            if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', column_name):
+            if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", column_name):
                 logger.warning("Skipping invalid column name: %s", column_name)
                 continue
-                
+
             null_count_result = hook.get_first(
                 f"""
                 SELECT COUNT(*) FROM {full_table_name}
@@ -1002,11 +1012,11 @@ class DataQualityValidator:
         try:
             # Check for null values in key fields - validate table name
             # Validate schema and table names to prevent SQL injection
-            if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', schema_name):
+            if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", schema_name):
                 raise ValueError(f"Invalid schema name: {schema_name!r}")
-            if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', table_name):
+            if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", table_name):
                 raise ValueError(f"Invalid table name: {table_name!r}")
-                
+
             query = f"""
             SELECT
                 COUNT(*) as total_rows,
@@ -1040,7 +1050,10 @@ class DataQualityValidator:
 
         except Exception as e:
             logger.error(
-                "Completeness validation failed for %s.%s: %s", schema_name, table_name, e
+                "Completeness validation failed for %s.%s: %s",
+                schema_name,
+                table_name,
+                e,
             )
             return {
                 "table_name": f"{schema_name}.{table_name}",
@@ -1070,13 +1083,13 @@ class DataQualityValidator:
         """
         try:
             # Validate identifiers to prevent SQL injection
-            if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', schema_name):
+            if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", schema_name):
                 raise ValueError(f"Invalid schema name: {schema_name!r}")
-            if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', table_name):
+            if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", table_name):
                 raise ValueError(f"Invalid table name: {table_name!r}")
-            if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', date_column):
+            if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", date_column):
                 raise ValueError(f"Invalid column name: {date_column!r}")
-                
+
             query = f"""
             SELECT
                 MAX({date_column}) as latest_record,
@@ -1179,7 +1192,10 @@ class DataQualityValidator:
 
         except Exception as e:
             logger.error(
-                "Data quality validation failed for %s.%s: %s", schema_name, table_name, e
+                "Data quality validation failed for %s.%s: %s",
+                schema_name,
+                table_name,
+                e,
             )
             return {
                 "table_name": f"{schema_name}.{table_name}",

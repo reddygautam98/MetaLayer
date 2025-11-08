@@ -108,7 +108,7 @@ jobs:
     
     env:
       AIRFLOW_HOME: ${{ github.workspace }}/airflow_home
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow_password@localhost:5432/metalayer_etl
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow_password@postgres:5432/metalayer_etl
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: false
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: true

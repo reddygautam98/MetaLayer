@@ -3,6 +3,9 @@ MetaLayer Prometheus Metrics Exporter
 This module exports custom metrics for the MetaLayer data pipeline.
 """
 
+# pylint: disable=line-too-long,broad-exception-caught
+# TODO: Improve exception handling specificity
+
 import logging
 import os
 import threading

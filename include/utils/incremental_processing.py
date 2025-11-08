@@ -12,6 +12,9 @@ Features:
 - Performance optimization with chunking and batching
 """
 
+# pylint: disable=too-many-lines,too-many-instance-attributes,line-too-long,broad-exception-caught
+# TODO: Split this module into smaller components and improve exception handling
+
 import hashlib
 import logging
 from dataclasses import dataclass

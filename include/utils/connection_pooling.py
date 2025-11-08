@@ -13,6 +13,9 @@ Features:
 - Performance metrics and optimization recommendations
 """
 
+# pylint: disable=too-many-lines,too-many-instance-attributes,line-too-long,broad-exception-caught
+# TODO: Split this module into smaller components and improve exception handling
+
 import logging
 import threading
 import time
@@ -107,8 +110,8 @@ class OptimizedConnectionPool:
             )
 
         except Exception as e:
-            logger.error(f"Failed to initialize connection pool: {e}")
-            raise AirflowException(f"Pool initialization failed: {e}")
+            logger.error("Failed to initialize connection pool: %s", e)
+            raise AirflowException(f"Pool initialization failed: {e}") from e
 
     def _warm_up_connections(self):
         """Pre-create minimum number of connections to reduce latency"""
@@ -127,10 +130,10 @@ class OptimizedConnectionPool:
             for conn in connections:
                 self.pool.putconn(conn)
 
-            logger.info(f"Warmed up {len(connections)} connections")
+            logger.info("Warmed up %d connections", len(connections))
 
         except Exception as e:
-            logger.warning(f"Connection warm-up partially failed: {e}")
+            logger.warning("Connection warm-up partially failed: %s", e)
             # Return any successful connections
             for conn in connections:
                 try:

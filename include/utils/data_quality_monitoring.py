@@ -16,8 +16,12 @@ Features:
 - Integration with monitoring stack (Prometheus/Grafana)
 """
 
+# pylint: disable=too-many-lines,too-many-instance-attributes,line-too-long
+# TODO: Split this module into smaller components: table checks, email/alerting, trend analysis
+
 import json
 import logging
+import re
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
@@ -25,6 +29,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
+
+# Database imports - moved to top level for better error handling
+try:
+    from psycopg2 import sql
+    PSYCOPG2_AVAILABLE = True
+except ImportError as e:
+    logging.warning("psycopg2 not available. Some database operations may fail: %s", e)
+    PSYCOPG2_AVAILABLE = False
 
 # Great Expectations imports
 try:
@@ -42,7 +54,6 @@ except ImportError:
     GX_AVAILABLE = False
 
 from airflow.exceptions import AirflowException
-from airflow.models import Variable
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 
 logger = logging.getLogger(__name__)
@@ -101,6 +112,12 @@ class DataQualityMonitor:
             )
 
         self._ensure_monitoring_tables()
+
+    def _validate_table_name(self, table_name: str) -> str:
+        """Validate table name to prevent SQL injection"""
+        if not re.match(r'^[A-Za-z_][A-Za-z0-9_.]*$', table_name):
+            raise ValueError(f"Invalid table name: {table_name!r}")
+        return table_name
 
     def _initialize_great_expectations(self):
         """Initialize Great Expectations data context"""
@@ -181,7 +198,7 @@ class DataQualityMonitor:
             logger.info("Great Expectations context initialized successfully")
 
         except Exception as e:
-            logger.error(f"Failed to initialize Great Expectations: {e}")
+            logger.error("Failed to initialize Great Expectations: %s", e)
             self.context = None
 
     def _ensure_monitoring_tables(self):
@@ -235,8 +252,8 @@ class DataQualityMonitor:
             )
             logger.info("Data quality monitoring tables initialized")
         except Exception as e:
-            logger.error(f"Failed to create monitoring tables: {e}")
-            raise AirflowException(f"Monitoring table creation failed: {e}")
+            logger.error("Failed to create monitoring tables: %s", e)
+            raise AirflowException(f"Monitoring table creation failed: {e}") from e
 
     def create_expectation_suite(
         self, table_name: str, schema_name: str = "bronze"
@@ -340,12 +357,12 @@ class DataQualityMonitor:
             }
 
             logger.info(
-                f"Created expectation suite for {schema_name}.{table_name}: {suite_info}"
+                "Created expectation suite for %s.%s: %s", schema_name, table_name, suite_info
             )
             return suite_info
 
         except Exception as e:
-            logger.error(f"Failed to create expectation suite for {table_name}: {e}")
+            logger.error("Failed to create expectation suite for %s: %s", table_name, e)
             return {"error": str(e)}
 
     def run_quality_check(
@@ -381,7 +398,7 @@ class DataQualityMonitor:
             return result
 
         except Exception as e:
-            logger.error(f"Quality check failed for {table_name}: {e}")
+            logger.error("Quality check failed for %s: %s", table_name, e)
 
             # Return error result
             return QualityCheckResult(
@@ -498,7 +515,7 @@ class DataQualityMonitor:
             )
 
         except Exception as e:
-            logger.error(f"Great Expectations check failed: {e}")
+            logger.error("Great Expectations check failed: %s", e)
             raise
 
     def _run_basic_quality_check(
@@ -534,7 +551,11 @@ class DataQualityMonitor:
 
             for check_name, query, validation_func in checks:
                 try:
-                    result = self.hook.get_first(query)[0]
+                    query_result = self.hook.get_first(query)
+                    if query_result is None:
+                        result = 0
+                    else:
+                        result = query_result[0]
                     is_valid = validation_func(result)
 
                     metric = DataQualityMetric(
@@ -552,7 +573,7 @@ class DataQualityMonitor:
                         successful += 1
 
                 except Exception as e:
-                    logger.error(f"Basic check {check_name} failed: {e}")
+                    logger.error("Basic check %s failed: %s", check_name, e)
                     metric = DataQualityMetric(
                         metric_name=check_name,
                         table_name=full_table_name,
@@ -581,7 +602,7 @@ class DataQualityMonitor:
             )
 
         except Exception as e:
-            logger.error(f"Basic quality check failed: {e}")
+            logger.error("Basic quality check failed: %s", e)
             raise
 
     def _get_primary_key(self, schema_name: str, table_name: str) -> str:
@@ -663,10 +684,10 @@ class DataQualityMonitor:
                     ),
                 )
 
-            logger.info(f"Stored quality results for check {result.check_id}")
+            logger.info("Stored quality results for check %s", result.check_id)
 
         except Exception as e:
-            logger.error(f"Failed to store quality results: {e}")
+            logger.error("Failed to store quality results: %s", e)
 
     def get_quality_dashboard_data(self, days_back: int = 7) -> Dict[str, Any]:
         """Get data for quality monitoring dashboard"""
@@ -708,22 +729,44 @@ class DataQualityMonitor:
             )
 
             # Failed metrics breakdown
-            failed_metrics_query = f"""
-            SELECT
-                metric_name,
-                table_name,
-                COUNT(*) as failure_count,
-                MAX(timestamp) as last_failure
-            FROM {self.metrics_table}
-            WHERE status = 'fail' AND timestamp >= %s
-            GROUP BY metric_name, table_name
-            ORDER BY failure_count DESC
-            LIMIT 10
-            """
-
-            failed_metrics = self.hook.get_records(
-                failed_metrics_query, parameters=(cutoff_date,)
-            )
+            # Validate table name to prevent SQL injection
+            validated_metrics_table = self._validate_table_name(self.metrics_table)
+            
+            if PSYCOPG2_AVAILABLE:
+                failed_metrics_query = sql.SQL("""
+                SELECT
+                    metric_name,
+                    table_name,
+                    COUNT(*) as failure_count,
+                    MAX(timestamp) as last_failure
+                FROM {metrics_table}
+                WHERE status = %s AND timestamp >= %s
+                GROUP BY metric_name, table_name
+                ORDER BY failure_count DESC
+                LIMIT 10
+                """).format(metrics_table=sql.Identifier(*validated_metrics_table.split('.')))
+                
+                failed_metrics = self.hook.get_records(
+                    failed_metrics_query.as_string(self.hook.get_conn()), 
+                    parameters=('fail', cutoff_date)
+                )
+            else:
+                # Fallback for when psycopg2 is not available - use validated table name
+                failed_metrics_query = f"""
+                SELECT
+                    metric_name,
+                    table_name,
+                    COUNT(*) as failure_count,
+                    MAX(timestamp) as last_failure
+                FROM {validated_metrics_table}
+                WHERE status = %s AND timestamp >= %s
+                GROUP BY metric_name, table_name
+                ORDER BY failure_count DESC
+                LIMIT 10
+                """
+                failed_metrics = self.hook.get_records(
+                    failed_metrics_query, parameters=('fail', cutoff_date)
+                )
 
             return {
                 "quality_trends": [
@@ -733,7 +776,7 @@ class DataQualityMonitor:
                         "total_checks": row[2],
                         "failing_checks": row[3],
                     }
-                    for row in trends
+                    for row in (trends or [])
                 ],
                 "table_summary": [
                     {
@@ -744,7 +787,7 @@ class DataQualityMonitor:
                         "total_runs": row[4],
                         "last_check": row[5].isoformat() if row[5] else None,
                     }
-                    for row in table_summary
+                    for row in (table_summary or [])
                 ],
                 "failed_metrics": [
                     {
@@ -753,25 +796,25 @@ class DataQualityMonitor:
                         "failure_count": row[2],
                         "last_failure": row[3].isoformat() if row[3] else None,
                     }
-                    for row in failed_metrics
+                    for row in (failed_metrics or [])
                 ],
                 "summary": {
-                    "total_tables": len(table_summary),
+                    "total_tables": len(table_summary or []),
                     "avg_quality_score": (
-                        sum(row[1] for row in table_summary if row[1])
-                        / len(table_summary)
+                        sum(row[1] for row in (table_summary or []) if row[1])
+                        / len(table_summary or [])
                         if table_summary
                         else 0
                     ),
                     "tables_below_threshold": len(
-                        [row for row in table_summary if row[1] and row[1] < 95]
+                        [row for row in (table_summary or []) if row[1] and row[1] < 95]
                     ),
                     "generated_at": datetime.now().isoformat(),
                 },
             }
 
         except Exception as e:
-            logger.error(f"Failed to get dashboard data: {e}")
+            logger.error("Failed to get dashboard data: %s", e)
             return {"error": str(e)}
 
 
@@ -785,19 +828,29 @@ def basic_data_quality_check(
     hook = PostgresHook(postgres_conn_id=conn_id)
 
     try:
+        # Validate table and schema names to prevent SQL injection
+        if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', schema_name):
+            raise ValueError(f"Invalid schema name: {schema_name!r}")
+        if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', table_name):
+            raise ValueError(f"Invalid table name: {table_name!r}")
+            
         full_table_name = f"{schema_name}.{table_name}"
 
-        # Basic metrics
-        record_count = hook.get_first(f"SELECT COUNT(*) FROM {full_table_name}")[0]
+        # Basic metrics - safe indexing
+        count_result = hook.get_first(f"SELECT COUNT(*) FROM {full_table_name}")
+        if count_result is None:
+            record_count = 0
+        else:
+            record_count = count_result[0]
 
-        # Get table columns
-        columns_query = f"""
+        # Get table columns - using parameterized query
+        columns_query = """
         SELECT column_name, data_type, is_nullable
         FROM information_schema.columns
-        WHERE table_schema = '{schema_name}' AND table_name = '{table_name}'
+        WHERE table_schema = %s AND table_name = %s
         ORDER BY ordinal_position
         """
-        columns = hook.get_records(columns_query)
+        columns = hook.get_records(columns_query, parameters=(schema_name, table_name))
 
         metrics = []
         issues = []
@@ -862,7 +915,7 @@ def basic_data_quality_check(
         }
 
     except Exception as e:
-        logger.error(f"Basic quality check failed for {full_table_name}: {e}")
+        logger.error("Basic quality check failed for %s: %s", full_table_name, e)
         return {
             "table_name": f"{schema_name}.{table_name}",
             "error": str(e),
@@ -901,7 +954,7 @@ def run_table_quality_check(
         return asdict(result)
     except Exception as e:
         logger.warning(
-            f"Great Expectations check failed, falling back to basic checks: {e}"
+            "Great Expectations check failed, falling back to basic checks: %s", e
         )
         return basic_data_quality_check(table_name, schema_name, conn_id)
 
@@ -918,7 +971,7 @@ class DataQualityValidator:
     def __init__(self, conn_id: str = "postgres_default"):
         self.conn_id = conn_id
         self.hook = PostgresHook(postgres_conn_id=conn_id)
-        logger.info(f"DataQualityValidator initialized with connection: {conn_id}")
+        logger.info("DataQualityValidator initialized with connection: %s", conn_id)
 
     def validate_table_completeness(
         self, table_name: str, schema_name: str = "bronze"
@@ -968,7 +1021,7 @@ class DataQualityValidator:
 
         except Exception as e:
             logger.error(
-                f"Completeness validation failed for {schema_name}.{table_name}: {e}"
+                "Completeness validation failed for %s.%s: %s", schema_name, table_name, e
             )
             return {
                 "table_name": f"{schema_name}.{table_name}",
@@ -1046,7 +1099,7 @@ class DataQualityValidator:
 
         except Exception as e:
             logger.error(
-                f"Freshness validation failed for {schema_name}.{table_name}: {e}"
+                "Freshness validation failed for %s.%s: %s", schema_name, table_name, e
             )
             return {
                 "table_name": f"{schema_name}.{table_name}",
@@ -1070,7 +1123,7 @@ class DataQualityValidator:
         """
         try:
             logger.info(
-                f"Running data quality validation for {schema_name}.{table_name}"
+                "Running data quality validation for %s.%s", schema_name, table_name
             )
 
             # Run completeness check
@@ -1099,7 +1152,7 @@ class DataQualityValidator:
 
         except Exception as e:
             logger.error(
-                f"Data quality validation failed for {schema_name}.{table_name}: {e}"
+                "Data quality validation failed for %s.%s: %s", schema_name, table_name, e
             )
             return {
                 "table_name": f"{schema_name}.{table_name}",

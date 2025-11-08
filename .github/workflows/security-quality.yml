@@ -90,14 +90,15 @@ jobs:
             sys.exit(0)
 
         vulns = data.get('vulnerabilities', []) or []
-        high_crit = [v for v in vulns if v.get('severity', '').lower() in ('high', 'critical')]
+        # Normalize severity (handle None, uppercase, and surrounding whitespace)
+        high_crit = [v for v in vulns if ((v.get('severity') or '').strip().lower() in ('high', 'critical'))]
         
         if vulns:
             print(f"Found {len(vulns)} total vulnerability(ies)")
             for v in vulns:
-                pkg = v.get('package_name', 'unknown')
-                sev = v.get('severity', 'unknown')
-                vuln_id = v.get('vulnerability_id', 'unknown')
+                pkg = v.get('package_name') or 'unknown'
+                sev = (v.get('severity') or 'unknown')
+                vuln_id = v.get('vulnerability_id') or 'unknown'
                 print(f"  - {pkg}: {vuln_id} ({sev})")
         
         if high_crit:

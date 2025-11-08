@@ -460,8 +460,7 @@ def transform_orders_bronze_to_silver(**context) -> Dict[str, Any]:
 
                     if metrics["transformation_errors"] > 10:
                         raise DataTransformationError(
-                            f"Too many transformation errors: {
-                                metrics['transformation_errors']}"
+                            f"Too many transformation errors: {metrics['transformation_errors']}"
                         )
 
         # Calculate final metrics

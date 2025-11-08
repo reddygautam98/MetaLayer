@@ -18,15 +18,14 @@ import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from queue import Empty, Queue
+from datetime import datetime
 from typing import Any, Dict, Generator, Optional
 
 import psycopg2
 from airflow.exceptions import AirflowException
 from airflow.models import Variable
 from airflow.providers.postgres.hooks.postgres import PostgresHook
-from psycopg2 import extras, pool
+from psycopg2 import extras
 
 logger = logging.getLogger(__name__)
 

@@ -30,7 +30,6 @@ from airflow.operators.dummy import DummyOperator
 from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
-from airflow.sensors.external_task import ExternalTaskSensor
 from airflow.utils.trigger_rule import TriggerRule
 
 from utils.metrics_exporter import export_pipeline_metrics

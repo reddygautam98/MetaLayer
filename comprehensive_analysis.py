@@ -4,7 +4,6 @@ MetaLayer Comprehensive System Analysis Report
 Complete validation of all DAGs, ETL processes, and system functionality
 """
 
-import os
 import json
 import re
 from pathlib import Path
@@ -75,7 +74,7 @@ def analyze_system_overview():
         if file_path.is_file():
             try:
                 total_size += file_path.stat().st_size
-            except:
+            except OSError:
                 pass
 
     structure["total_size_mb"] = round(total_size / (1024 * 1024), 2)
@@ -209,7 +208,6 @@ def analyze_etl_pipeline():
 
         # Check if DAGs exist
         for expected_dag in expected_dags:
-            dag_file = Path(f"dags/{expected_dag}.py")
             alt_files = list(Path("dags").glob(f'*{expected_dag.split("_")[-1]}*.py'))
 
             if any(expected_dag in str(f) for f in alt_files):
@@ -450,7 +448,7 @@ def print_report(report):
     print(f"Analysis completed: {report['analysis_timestamp']}")
 
     # System Overview
-    print(f"\n📊 SYSTEM OVERVIEW")
+    print("\n📊 SYSTEM OVERVIEW")
     print("-" * 40)
     overview = report["system_overview"]
     print(f"Total project size: {overview['total_size_mb']} MB")
@@ -462,7 +460,7 @@ def print_report(report):
     print(f"Data files: {overview['csv_files']} CSV")
 
     # DAG Analysis
-    print(f"\n🔄 DAG ANALYSIS")
+    print("\n🔄 DAG ANALYSIS")
     print("-" * 40)
     dag_analysis = report["dag_analysis"]
     print(f"Total DAGs: {dag_analysis['total_dags']}")
@@ -471,7 +469,7 @@ def print_report(report):
     print(f"DAGs with Dependencies: {len(dag_analysis['dependency_map'])}")
 
     # ETL Pipeline
-    print(f"\n⚡ ETL PIPELINE STATUS")
+    print("\n⚡ ETL PIPELINE STATUS")
     print("-" * 40)
     etl = report["etl_pipeline_analysis"]["medallion_architecture"]
     for layer, info in etl.items():
@@ -482,7 +480,7 @@ def print_report(report):
         )
 
     # Data Analysis
-    print(f"\n📁 DATA ANALYSIS")
+    print("\n📁 DATA ANALYSIS")
     print("-" * 40)
     data_analysis = report["data_analysis"]
     print(f"Total source records: {data_analysis['total_records']:,}")
@@ -495,33 +493,33 @@ def print_report(report):
             print(f"❌ {source}: Missing")
 
     # Deployment Readiness
-    print(f"\n🚀 DEPLOYMENT READINESS")
+    print("\n🚀 DEPLOYMENT READINESS")
     print("-" * 40)
     readiness = report["deployment_readiness"]
     print(f"Overall Score: {readiness['overall_score']}%")
 
-    print(f"\nCritical Checks:")
+    print("\nCritical Checks:")
     for check, passed in readiness["critical_checks"].items():
         status = "✅" if passed else "❌"
         print(f"  {status} {check.replace('_', ' ').title()}")
 
     if readiness["blockers"]:
-        print(f"\n🚫 BLOCKERS:")
+        print("\n🚫 BLOCKERS:")
         for blocker in readiness["blockers"]:
             print(f"  • {blocker}")
 
     if readiness["warnings"]:
-        print(f"\n⚠️ WARNINGS:")
+        print("\n⚠️ WARNINGS:")
         for warning in readiness["warnings"]:
             print(f"  • {warning}")
 
     # Recommendations
-    print(f"\n💡 RECOMMENDATIONS")
+    print("\n💡 RECOMMENDATIONS")
     print("-" * 40)
     for recommendation in report["recommendations"]:
         print(f"• {recommendation}")
 
-    print(f"\n" + "=" * 80)
+    print("\n" + "=" * 80)
 
     return readiness["overall_score"]
 
@@ -537,7 +535,7 @@ def main():
         with open("metalayer_analysis_report.json", "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, default=str)
 
-        print(f"📄 Detailed report saved to: metalayer_analysis_report.json")
+        print("📄 Detailed report saved to: metalayer_analysis_report.json")
 
         return 0 if score >= 80 else 1
 

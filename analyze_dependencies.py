@@ -4,7 +4,6 @@ MetaLayer DAG Dependency Analysis
 Analyzes all DAG dependencies and task relationships
 """
 
-import os
 import re
 from pathlib import Path
 
@@ -94,9 +93,11 @@ def validate_dependencies(dependency_map, dag_list):
 
         # Show internal task dependencies
         if info["internal_task_deps"]:
-            print(
-                f"  🔗 Task flow: {' >> '.join(set([t[0] for t in info['internal_task_deps']] + [t[1] for t in info['internal_task_deps']]))}"
+            task_names = set(
+                [t[0] for t in info["internal_task_deps"]]
+                + [t[1] for t in info["internal_task_deps"]]
             )
+            print(f"  🔗 Task flow: {' >> '.join(task_names)}")
 
     return issues
 
@@ -104,7 +105,7 @@ def validate_dependencies(dependency_map, dag_list):
 def analyze_medallion_architecture():
     """Analyze the medallion architecture flow"""
 
-    print(f"\n🏗️ MEDALLION ARCHITECTURE ANALYSIS")
+    print("\n🏗️ MEDALLION ARCHITECTURE ANALYSIS")
     print("=" * 50)
 
     # Expected medallion flow
@@ -144,7 +145,7 @@ def main():
     expected_flow = analyze_medallion_architecture()
 
     # Summary
-    print(f"\n📋 DEPENDENCY SUMMARY")
+    print("\n📋 DEPENDENCY SUMMARY")
     print("=" * 50)
 
     if issues:

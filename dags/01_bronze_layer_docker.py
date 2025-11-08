@@ -17,24 +17,20 @@ Features:
 """
 
 import logging
-import os
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 import pandas as pd
 from airflow import DAG
-from airflow.exceptions import AirflowException, AirflowSkipException
+from airflow.exceptions import AirflowException
 from airflow.models import Variable
 from airflow.operators.dummy import DummyOperator
-from airflow.operators.email import EmailOperator
 from airflow.operators.python import BranchPythonOperator, PythonOperator
-from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.utils.trigger_rule import TriggerRule
 
-from utils.connection_pooling import get_db_connection
 from utils.data_quality_monitoring import DataQualityValidator
 from utils.metrics_exporter import export_pipeline_metrics
 

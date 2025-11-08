@@ -20,7 +20,6 @@ Features:
 import logging
 import sys
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Any, Dict
 
 import pandas as pd
@@ -30,11 +29,9 @@ from airflow.models import Variable
 from airflow.operators.dummy import DummyOperator
 from airflow.operators.python import PythonOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
-from airflow.sensors.external_task import ExternalTaskSensor
 from airflow.utils.trigger_rule import TriggerRule
 
 from utils.data_quality_monitoring import DataQualityValidator
-from utils.incremental_processing import IncrementalProcessor
 from utils.metrics_exporter import export_pipeline_metrics
 
 # Add include path for utilities

@@ -16,16 +16,17 @@ SQLAlchemy==1.4.48                 # Database ORM (compatible with Airflow 2.8.1
 # =====================================================
 apache-airflow-providers-postgres==5.7.1    # PostgreSQL provider
 psycopg2-binary==2.9.7             # PostgreSQL adapter
-apache-airflow-providers-common-sql==1.10.0 # SQL operations
+apache-airflow-providers-common-sql==1.24.1 # SQL operations (security fix)
 Flask-Session>=0.4.0,<1.0.0        # Session management (Airflow 2.8.1 compatible)
+Flask-AppBuilder==4.8.1            # Security fix for transitive dependency
 
 # =====================================================
 # MONITORING & METRICS (LIGHTWEIGHT)
 # =====================================================  
-sqlparse==0.4.4                   # SQL parsing
+sqlparse==0.5.0                   # SQL parsing (security fix)
 python-dateutil==2.8.2            # Date processing
 prometheus-client==0.17.1         # Metrics collection
-requests==2.31.0                  # HTTP requests for monitoring
+requests==2.32.4                  # HTTP requests for monitoring (security fix)
 
 # =====================================================
 # TESTING & QUALITY (DEVELOPMENT)

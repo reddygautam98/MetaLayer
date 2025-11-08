@@ -290,7 +290,7 @@ class DataQualityMonitor:
             validator.expect_table_row_count_to_be_between(min_value=1, max_value=None)
 
             # 2. Get column info
-            columns = validator.get_dataset().columns
+            columns = validator.get_dataset().columns or []
 
             for column in columns:
                 column_data = validator.get_dataset()[column]
@@ -466,7 +466,10 @@ class DataQualityMonitor:
             checkpoint_result = self.context.run_checkpoint(**checkpoint_config)
 
             # Parse results
-            validation_result = checkpoint_result.list_validation_results()[0]
+            validation_results = checkpoint_result.list_validation_results()
+            if not validation_results:
+                raise AirflowException("No validation results returned from checkpoint")
+            validation_result = validation_results[0]
 
             # Extract metrics
             metrics = []
@@ -526,22 +529,25 @@ class DataQualityMonitor:
             metrics = []
             full_table_name = f"{schema_name}.{table_name}"
 
-            # Basic checks
+            # Basic checks - validate table name to prevent SQL injection
+            validated_full_table = self._validate_table_name(full_table_name)
             primary_key = self._get_primary_key(schema_name, table_name)
+            validated_primary_key = self._validate_table_name(primary_key)
+            
             checks = [
                 (
                     "row_count",
-                    f"SELECT COUNT(*) FROM {full_table_name}",
+                    f"SELECT COUNT(*) FROM {validated_full_table}",
                     lambda x: x > 0,
                 ),
                 (
                     "null_check",
-                    f"SELECT COUNT(*) FROM {full_table_name} WHERE {primary_key} IS NULL",
+                    f"SELECT COUNT(*) FROM {validated_full_table} WHERE {validated_primary_key} IS NULL",
                     lambda x: x == 0,
                 ),
                 (
                     "duplicate_check",
-                    f"SELECT COUNT(*) - COUNT(DISTINCT {primary_key}) FROM {full_table_name}",
+                    f"SELECT COUNT(*) - COUNT(DISTINCT {validated_primary_key}) FROM {validated_full_table}",
                     lambda x: x == 0,
                 ),
             ]
@@ -836,7 +842,7 @@ def basic_data_quality_check(
             
         full_table_name = f"{schema_name}.{table_name}"
 
-        # Basic metrics - safe indexing
+        # Basic metrics - safe indexing with validated table name
         count_result = hook.get_first(f"SELECT COUNT(*) FROM {full_table_name}")
         if count_result is None:
             record_count = 0
@@ -850,19 +856,25 @@ def basic_data_quality_check(
         WHERE table_schema = %s AND table_name = %s
         ORDER BY ordinal_position
         """
-        columns = hook.get_records(columns_query, parameters=(schema_name, table_name))
+        columns = hook.get_records(columns_query, parameters=(schema_name, table_name)) or []
 
         metrics = []
         issues = []
 
         for column_name, data_type, is_nullable in columns:
-            # Check for null values
-            null_count = hook.get_first(
+            # Check for null values - validate column name to prevent SQL injection
+            validated_column_name = column_name
+            if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', column_name):
+                logger.warning("Skipping invalid column name: %s", column_name)
+                continue
+                
+            null_count_result = hook.get_first(
                 f"""
                 SELECT COUNT(*) FROM {full_table_name}
-                WHERE {column_name} IS NULL
+                WHERE {validated_column_name} IS NULL
             """
-            )[0]
+            )
+            null_count = null_count_result[0] if null_count_result else 0
 
             null_percentage = (
                 (null_count / record_count * 100) if record_count > 0 else 0
@@ -890,12 +902,13 @@ def basic_data_quality_check(
 
         # Additional table-specific checks
         if "email" in [col[0] for col in columns]:
-            invalid_emails = hook.get_first(
+            invalid_emails_result = hook.get_first(
                 f"""
                 SELECT COUNT(*) FROM {full_table_name}
                 WHERE email IS NOT NULL AND email NOT LIKE '%@%'
             """
-            )[0]
+            )
+            invalid_emails = invalid_emails_result[0] if invalid_emails_result else 0
 
             if invalid_emails > 0:
                 issues.append(f"Found {invalid_emails} invalid email formats")
@@ -987,7 +1000,13 @@ class DataQualityValidator:
             Dict with validation results
         """
         try:
-            # Check for null values in key fields
+            # Check for null values in key fields - validate table name
+            # Validate schema and table names to prevent SQL injection
+            if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', schema_name):
+                raise ValueError(f"Invalid schema name: {schema_name!r}")
+            if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', table_name):
+                raise ValueError(f"Invalid table name: {table_name!r}")
+                
             query = f"""
             SELECT
                 COUNT(*) as total_rows,
@@ -1050,6 +1069,14 @@ class DataQualityValidator:
             Dict with validation results
         """
         try:
+            # Validate identifiers to prevent SQL injection
+            if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', schema_name):
+                raise ValueError(f"Invalid schema name: {schema_name!r}")
+            if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', table_name):
+                raise ValueError(f"Invalid table name: {table_name!r}")
+            if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', date_column):
+                raise ValueError(f"Invalid column name: {date_column!r}")
+                
             query = f"""
             SELECT
                 MAX({date_column}) as latest_record,

@@ -69,7 +69,7 @@ def simulate_database_metrics():
             time.sleep(10)  # Update every 10 seconds
 
         except Exception as e:
-            logger.error(f"Error updating database metrics: {e}")
+            logger.error("Error updating database metrics: %s", e)
             time.sleep(30)
 
 
@@ -92,7 +92,7 @@ def simulate_data_quality_metrics():
             time.sleep(30)  # Update every 30 seconds
 
         except Exception as e:
-            logger.error(f"Error updating quality metrics: {e}")
+            logger.error("Error updating quality metrics: %s", e)
             time.sleep(60)
 
 
@@ -123,7 +123,7 @@ def simulate_processing_counters():
             time.sleep(45)  # Update every 45 seconds
 
         except Exception as e:
-            logger.error(f"Error updating processing metrics: {e}")
+            logger.error("Error updating processing metrics: %s", e)
             time.sleep(90)
 
 
@@ -159,7 +159,8 @@ def collect_real_etl_metrics():
                         for layer, table in layers_tables:
                             try:
                                 cur.execute(f"SELECT COUNT(*) FROM {layer}.{table}")
-                                count = cur.fetchone()[0]
+                                result = cur.fetchone()
+                                count = result[0] if result else 0
 
                                 # Update records processed metric
                                 records_processed_total.labels(
@@ -181,7 +182,8 @@ def collect_real_etl_metrics():
                         cur.execute(
                             "SELECT count(*) FROM pg_stat_activity WHERE state = 'active'"
                         )
-                        active_connections = cur.fetchone()[0]
+                        result = cur.fetchone()
+                        active_connections = result[0] if result else 0
 
                         db_pool_active_connections.labels(
                             pool_name="postgres_main", database="metalayer_etl"
@@ -198,12 +200,12 @@ def collect_real_etl_metrics():
                         )
 
             except Exception as e:
-                logger.error(f"Error collecting ETL metrics: {e}")
+                logger.error("Error collecting ETL metrics: %s", e)
 
             time.sleep(30)  # Collect every 30 seconds
 
     except Exception as e:
-        logger.error(f"Fatal error in metrics collection: {e}")
+        logger.error("Fatal error in metrics collection: %s", e)
 
 
 def simulate_processing_metrics():
@@ -230,7 +232,7 @@ def simulate_processing_metrics():
             time.sleep(45)  # Update every 45 seconds
 
         except Exception as e:
-            logger.error(f"Error simulating processing metrics: {e}")
+            logger.error("Error simulating processing metrics: %s", e)
             time.sleep(90)
 
 
@@ -276,7 +278,7 @@ def export_pipeline_metrics(
         records_processed: Number of records processed by the task
     """
     try:
-        logger.info(f"Exporting metrics for {dag_id}.{task_id}: status={status}")
+        logger.info("Exporting metrics for %s.%s: status=%s", dag_id, task_id, status)
 
         # Update records processed counter
         if records_processed > 0:
@@ -294,10 +296,10 @@ def export_pipeline_metrics(
                 table=task_id,
             ).observe(execution_time)
 
-        logger.info(f"Successfully exported metrics for {dag_id}.{task_id}")
+        logger.info("Successfully exported metrics for %s.%s", dag_id, task_id)
 
     except Exception as e:
-        logger.error(f"Error exporting pipeline metrics: {e}")
+        logger.error("Error exporting pipeline metrics: %s", e)
 
 
 if __name__ == "__main__":

@@ -84,7 +84,7 @@ class SourceDataError(AirflowException):
 # =====================================================
 # DATA QUALITY & VALIDATION FUNCTIONS
 # =====================================================
-def validate_source_data(**context) -> Dict[str, Any]:
+def validate_source_data(**context) -> Dict[str, Any]:  # noqa: C901
     """Validate source data files and structure"""
     execution_date = context["execution_date"]
 

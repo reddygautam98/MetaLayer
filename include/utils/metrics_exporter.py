@@ -96,8 +96,8 @@ def simulate_data_quality_metrics():
             time.sleep(60)
 
 
-def simulate_processing_metrics():
-    """Simulate processing duration and record counts"""
+def simulate_processing_counters():
+    """Simulate processing counters and record counts"""
     layers = ["bronze", "silver", "gold"]
     tables = ["customers", "orders", "products"]
     operations = ["load", "transform", "validate"]
@@ -244,12 +244,12 @@ def start_metrics_collection():
 
     # Start metric collection threads
     real_metrics_thread = threading.Thread(target=collect_real_etl_metrics, daemon=True)
-    processing_thread = threading.Thread(
-        target=simulate_processing_metrics, daemon=True
-    )
+    counters_thread = threading.Thread(target=simulate_processing_counters, daemon=True)
+    duration_thread = threading.Thread(target=simulate_processing_metrics, daemon=True)
 
     real_metrics_thread.start()
-    processing_thread.start()
+    counters_thread.start()
+    duration_thread.start()
 
     logger.info("All metric collection threads started")
 

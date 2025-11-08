@@ -172,7 +172,7 @@ class MetaLayerMetricsCollector:
                     try:
                         # Get table count and record counts
                         cur.execute(
-                            f"""
+                            """
                             SELECT
                                 schemaname,
                                 tablename,

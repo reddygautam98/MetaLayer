@@ -384,17 +384,17 @@ class DataQualityReportGenerator:
             passed_checks = len([i for i in quality_issues if i["status"] == "PASS"])
             failed_checks = len([i for i in quality_issues if i["status"] == "FAIL"])
 
-            print(f"\n📈 Data Quality Summary:")
+            print("\n📈 Data Quality Summary:")
             print(f"   Quality checks passed: {passed_checks}/{total_checks}")
             print(f"   Quality checks failed: {failed_checks}/{total_checks}")
 
             if failed_checks > 0:
-                print(f"\n⚠️ Data quality issues detected:")
+                print("\n⚠️ Data quality issues detected:")
                 for issue in quality_issues:
                     if issue["status"] == "FAIL":
                         print(f"   - {issue['name']}: {issue['issue_count']} issues")
 
-            print(f"\n✅ Data quality report generation completed!")
+            print("\n✅ Data quality report generation completed!")
             return True
 
         except Exception as e:
@@ -437,7 +437,7 @@ class DataQualityReportGenerator:
         with open(json_file, "w", encoding="utf-8") as f:
             json.dump(empty_json, f, indent=2)
 
-        print(f"📊 Empty reports generated for CI/CD artifact upload")
+    print("📊 Empty reports generated for CI/CD artifact upload")
 
 
 def main():

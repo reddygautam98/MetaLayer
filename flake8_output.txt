@@ -1,0 +1,172 @@
+.\.astro\test_dag_integrity_default.py:16:89: E501 line too long (110 > 88 characters)
+.\.astro\test_dag_integrity_default.py:22:89: E501 line too long (100 > 88 characters)
+.\.astro\test_dag_integrity_default.py:51:89: E501 line too long (107 > 88 characters)
+.\.astro\test_dag_integrity_default.py:73:89: E501 line too long (91 > 88 characters)
+.\comprehensive_analysis.py:433:89: E501 line too long (95 > 88 characters)
+.\comprehensive_analysis.py:458:89: E501 line too long (92 > 88 characters)
+.\comprehensive_analysis.py:479:89: E501 line too long (118 > 88 characters)
+.\comprehensive_analysis.py:490:89: E501 line too long (99 > 88 characters)
+.\dags\00_master_orchestrator_docker.py:172:89: E501 line too long (101 > 88 characters)
+.\dags\00_master_orchestrator_docker.py:178:89: E501 line too long (101 > 88 characters)
+.\dags\00_master_orchestrator_docker.py:184:89: E501 line too long (99 > 88 characters)
+.\dags\00_master_orchestrator_docker.py:190:89: E501 line too long (120 > 88 characters)
+.\dags\00_master_orchestrator_docker.py:232:89: E501 line too long (106 > 88 characters)
+.\dags\00_master_orchestrator_docker.py:253:89: E501 line too long (108 > 88 characters)
+.\dags\00_master_orchestrator_docker.py:275:89: E501 line too long (90 > 88 characters)
+.\dags\00_master_orchestrator_docker.py:358:89: E501 line too long (101 > 88 characters)
+.\dags\00_master_orchestrator_docker.py:366:89: E501 line too long (101 > 88 characters)
+.\dags\00_master_orchestrator_docker.py:524:89: E501 line too long (96 > 88 characters)
+.\dags\00_master_orchestrator_docker.py:529:89: E501 line too long (97 > 88 characters)
+.\dags\00_master_orchestrator_docker.py:545:89: E501 line too long (129 > 88 characters)
+.\dags\00_master_orchestrator_docker.py:561:89: E501 line too long (98 > 88 characters)
+.\dags\01_bronze_layer_docker.py:87:1: C901 'validate_source_data' is too complex (16)
+.\dags\01_bronze_layer_docker.py:300:89: E501 line too long (105 > 88 characters)
+.\dags\01_bronze_layer_docker.py:415:89: E501 line too long (105 > 88 characters)
+.\dags\01_bronze_layer_docker.py:451:89: E501 line too long (96 > 88 characters)
+.\dags\01_bronze_layer_docker.py:455:89: E501 line too long (90 > 88 characters)
+.\dags\01_bronze_layer_docker.py:467:89: E501 line too long (95 > 88 characters)
+.\dags\01_bronze_layer_docker.py:567:89: E501 line too long (89 > 88 characters)
+.\dags\02_silver_layer_docker.py:170:89: E501 line too long (89 > 88 characters)
+.\dags\02_silver_layer_docker.py:267:89: E501 line too long (96 > 88 characters)
+.\dags\02_silver_layer_docker.py:296:89: E501 line too long (97 > 88 characters)
+.\dags\02_silver_layer_docker.py:318:89: E501 line too long (111 > 88 characters)
+.\dags\02_silver_layer_docker.py:430:89: E501 line too long (97 > 88 characters)
+.\dags\02_silver_layer_docker.py:460:89: E501 line too long (97 > 88 characters)
+.\dags\02_silver_layer_docker.py:506:89: E501 line too long (110 > 88 characters)
+.\dags\02_silver_layer_docker.py:512:89: E501 line too long (125 > 88 characters)
+.\dags\02_silver_layer_docker.py:519:89: E501 line too long (93 > 88 characters)
+.\dags\02_silver_layer_docker.py:536:89: E501 line too long (107 > 88 characters)
+.\dags\02_silver_layer_docker.py:543:89: E501 line too long (92 > 88 characters)
+.\dags\02_silver_layer_docker.py:552:89: E501 line too long (136 > 88 characters)
+.\dags\02_silver_layer_docker.py:568:89: E501 line too long (89 > 88 characters)
+.\dags\02_silver_layer_docker.py:603:89: E501 line too long (117 > 88 characters)
+.\dags\02_silver_layer_docker.py:780:89: E501 line too long (98 > 88 characters)
+.\dags\02_silver_layer_docker.py:788:89: E501 line too long (104 > 88 characters)
+.\dags\03_gold_layer_docker.py:169:89: E501 line too long (99 > 88 characters)
+.\dags\03_gold_layer_docker.py:218:89: E501 line too long (103 > 88 characters)
+.\dags\03_gold_layer_docker.py:349:89: E501 line too long (97 > 88 characters)
+.\dags\03_gold_layer_docker.py:430:89: E501 line too long (106 > 88 characters)
+.\dags\03_gold_layer_docker.py:578:89: E501 line too long (91 > 88 characters)
+.\dags\03_gold_layer_docker.py:618:89: E501 line too long (115 > 88 characters)
+.\dags\03_gold_layer_docker.py:720:89: E501 line too long (97 > 88 characters)
+.\dags\03_gold_layer_docker.py:771:89: E501 line too long (114 > 88 characters)
+.\dags\03_gold_layer_docker.py:779:89: E501 line too long (102 > 88 characters)
+.\dags\disabled_dags\exampledag.py:20:89: E501 line too long (177 > 88 characters)
+.\dags\disabled_dags\exampledag.py:94:89: E501 line too long (89 > 88 characters)
+.\dags\disabled_dags\legacy_sql_server\00_init_db.py:24:89: E501 line too long (106 > 88 characters)
+.\dags\disabled_dags\legacy_sql_server\10_bronze_load.py:2:1: F401 'datetime.timedelta' imported but unused
+.\dags\disabled_dags\legacy_sql_server\10_bronze_load.py:52:89: E501 line too long (104 > 88 characters)
+.\dags\disabled_dags\legacy_sql_server\20_silver_transform.py:1:1: F401 'datetime.timedelta' imported but unused
+.\dags\disabled_dags\legacy_sql_server\20_silver_transform.py:16:89: E501 line too long (110 > 88 characters)
+.\dags\disabled_dags\legacy_sql_server\30_gold_build.py:1:1: F401 'datetime.timedelta' imported but unused
+.\dags\disabled_dags\legacy_sql_server\30_gold_build.py:16:89: E501 line too long (104 > 88 characters)
+.\dags\disabled_dags\legacy_sql_server\99_pipeline_full_refresh.py:2:1: F401 'datetime.timedelta' imported but unused
+.\dags\disabled_dags\legacy_sql_server\99_pipeline_full_refresh.py:41:89: E501 line too long (106 > 88 characters)
+.\dags\disabled_dags\legacy_sql_server\99_pipeline_full_refresh.py:46:89: E501 line too long (104 > 88 characters)
+.\dags\disabled_dags\legacy_sql_server\99_pipeline_full_refresh.py:61:89: E501 line too long (110 > 88 characters)
+.\dags\disabled_dags\legacy_sql_server\99_pipeline_full_refresh.py:66:89: E501 line too long (104 > 88 characters)
+.\dags\disabled_dags\silver_transform_million_records_DAG.py:38:89: E501 line too long (91 > 88 characters)
+.\dags\disabled_dags\silver_transform_million_records_DAG.py:68:89: E501 line too long (90 > 88 characters)
+.\include\monitoring\metrics_exporter.py:175:29: F541 f-string is missing placeholders
+.\include\utils\connection_pooling.py:302:89: E501 line too long (91 > 88 characters)
+.\include\utils\data_quality_monitoring.py:32:5: F401 'great_expectations.checkpoint.SimpleCheckpoint' imported but unused
+.\include\utils\data_quality_monitoring.py:35:5: F401 'great_expectations.exceptions.DataContextError' imported but unused
+.\include\utils\data_quality_monitoring.py:45:1: F401 'airflow.models.Variable' imported but unused
+.\include\utils\data_quality_monitoring.py:343:89: E501 line too long (89 > 88 characters)
+.\include\utils\data_quality_monitoring.py:522:89: E501 line too long (90 > 88 characters)
+.\include\utils\data_quality_monitoring.py:527:89: E501 line too long (94 > 88 characters)
+.\include\utils\data_quality_monitoring.py:1004:89: E501 line too long (116 > 88 characters)
+.\include\utils\metrics_exporter.py:177:89: E501 line too long (89 > 88 characters)
+.\include\utils\metrics_exporter.py:182:89: E501 line too long (90 > 88 characters)
+.\include\utils\metrics_exporter.py:197:89: E501 line too long (89 > 88 characters)
+.\include\utils\metrics_exporter.py:209:1: F811 redefinition of unused 'simulate_processing_metrics' from line 99
+.\scripts\setup_airflow_config.py:25:1: F401 'os' imported but unused
+.\scripts\setup_airflow_config.py:341:89: E501 line too long (92 > 88 characters)
+.\scripts\setup_airflow_config.py:343:13: F841 local variable 'uri' is assigned to but never used
+.\scripts\setup_airflow_config.py:436:17: F541 f-string is missing placeholders
+.\scripts\setup_airflow_config.py:438:89: E501 line too long (117 > 88 characters)
+.\scripts\setup_airflow_config.py:441:89: E501 line too long (111 > 88 characters)
+.\scripts\setup_airflow_config.py:510:89: E501 line too long (91 > 88 characters)
+.\scripts\setup_airflow_config.py:543:89: E501 line too long (120 > 88 characters)
+.\scripts\setup_airflow_config.py:557:89: E501 line too long (89 > 88 characters)
+.\scripts\start_metrics_exporter.py:8:1: F401 'os' imported but unused
+.\scripts\start_metrics_exporter.py:15:1: E402 module level import not at top of file
+.\test_utilities.py:37:32: F541 f-string is missing placeholders
+.\test_utilities.py:39:32: F541 f-string is missing placeholders
+.\test_utilities.py:41:32: F541 f-string is missing placeholders
+.\test_utilities.py:72:89: E501 line too long (111 > 88 characters)
+.\test_utilities.py:89:9: F401 'utils.metrics_exporter.simulate_database_metrics' imported but unused
+.\test_utilities.py:95:13: F401 'prometheus_client' imported but unused
+.\test_utilities.py:206:89: E501 line too long (90 > 88 characters)
+.\test_utilities.py:259:11: F541 f-string is missing placeholders
+.\test_utilities.py:265:15: F541 f-string is missing placeholders
+.\tests\dags\test_dag_example.py:1:89: E501 line too long (215 > 88 characters)
+.\tests\data_quality\create_sample_data.py:7:1: F401 'random' imported but unused
+.\tests\data_quality\create_sample_data.py:8:1: F401 'datetime.datetime' imported but unused
+.\tests\data_quality\create_sample_data.py:8:1: F401 'datetime.timedelta' imported but unused
+.\tests\data_quality\create_sample_data.py:10:1: F401 'pandas as pd' imported but unused
+.\tests\data_quality\create_sample_data.py:192:89: E501 line too long (112 > 88 characters)
+.\tests\data_quality\create_sample_data.py:260:89: E501 line too long (118 > 88 characters)
+.\tests\data_quality\create_sample_data.py:300:89: E501 line too long (96 > 88 characters)
+.\tests\data_quality\create_sample_data.py:320:89: E501 line too long (92 > 88 characters)
+.\tests\data_quality\generate_report.py:12:1: F401 'datetime.timedelta' imported but unused
+.\tests\data_quality\generate_report.py:128:89: E501 line too long (95 > 88 characters)
+.\tests\data_quality\generate_report.py:133:89: E501 line too long (92 > 88 characters)
+.\tests\data_quality\generate_report.py:138:89: E501 line too long (101 > 88 characters)
+.\tests\data_quality\generate_report.py:143:89: E501 line too long (98 > 88 characters)
+.\tests\data_quality\generate_report.py:198:89: E501 line too long (106 > 88 characters)
+.\tests\data_quality\generate_report.py:387:19: F541 f-string is missing placeholders
+.\tests\data_quality\generate_report.py:392:23: F541 f-string is missing placeholders
+.\tests\data_quality\generate_report.py:397:19: F541 f-string is missing placeholders
+.\tests\data_quality\generate_report.py:440:15: F541 f-string is missing placeholders
+.\tests\data_quality\test_data_quality.py:8:1: F401 'typing.Any' imported but unused
+.\tests\data_quality\test_data_quality.py:8:1: F401 'typing.Dict' imported but unused
+.\tests\data_quality\test_data_quality.py:8:1: F401 'typing.List' imported but unused
+.\tests\data_quality\test_data_quality.py:10:1: F401 'pandas as pd' imported but unused
+.\tests\data_quality\test_data_quality.py:189:89: E501 line too long (102 > 88 characters)
+.\tests\data_quality\test_data_quality.py:270:89: E501 line too long (126 > 88 characters)
+.\tests\performance\test_dag_performance.py:11:1: F401 'os' imported but unused
+.\tests\test_dag_imports.py:17:9: F401 'bronze_layer_etl_pipeline' imported but unused
+.\tests\test_dag_imports.py:18:9: F401 'gold_layer_analytics_pipeline' imported but unused
+.\tests\test_dag_imports.py:19:9: F401 'master_etl_orchestrator' imported but unused
+.\tests\test_dag_imports.py:20:9: F401 'silver_layer_etl_pipeline' imported but unused
+.\validate_before_commit.py:14:35: W291 trailing whitespace
+.\validate_before_commit.py:37:1: W293 blank line contains whitespace
+.\validate_before_commit.py:41:89: E501 line too long (96 > 88 characters)
+.\validate_before_commit.py:45:1: W293 blank line contains whitespace
+.\validate_before_commit.py:47:1: W293 blank line contains whitespace
+.\validate_before_commit.py:56:1: W293 blank line contains whitespace
+.\validate_before_commit.py:68:1: W293 blank line contains whitespace
+.\validate_before_commit.py:75:1: W293 blank line contains whitespace
+.\validate_before_commit.py:84:1: W293 blank line contains whitespace
+.\validate_before_commit.py:93:1: W293 blank line contains whitespace
+.\validate_before_commit.py:95:89: E501 line too long (105 > 88 characters)
+.\validate_before_commit.py:96:1: W293 blank line contains whitespace
+.\validate_before_commit.py:98:1: W293 blank line contains whitespace
+.\validate_before_commit.py:103:1: W293 blank line contains whitespace
+.\validate_before_commit.py:108:1: W293 blank line contains whitespace
+.\validate_before_commit.py:110:89: E501 line too long (99 > 88 characters)
+.\validate_before_commit.py:111:89: E501 line too long (92 > 88 characters)
+.\validate_before_commit.py:112:1: W293 blank line contains whitespace
+.\validate_before_commit.py:115:1: W293 blank line contains whitespace
+.\validate_before_commit.py:129:1: W293 blank line contains whitespace
+.\validate_before_commit.py:134:1: W293 blank line contains whitespace
+.\validate_before_commit.py:136:1: W293 blank line contains whitespace
+.\validate_before_commit.py:142:1: W293 blank line contains whitespace
+.\validate_before_commit.py:146:1: W293 blank line contains whitespace
+.\validate_before_commit.py:151:1: W293 blank line contains whitespace
+.\validate_before_commit.py:160:1: W293 blank line contains whitespace
+.\validate_before_commit.py:169:1: W293 blank line contains whitespace
+.\validate_before_commit.py:171:1: W293 blank line contains whitespace
+.\validate_before_commit.py:175:1: W293 blank line contains whitespace
+.\validate_before_commit.py:179:1: W293 blank line contains whitespace
+.\validate_before_commit.py:186:89: E501 line too long (113 > 88 characters)
+.\validate_before_commit.py:191:1: W293 blank line contains whitespace
+.\validate_before_commit.py:201:1: W293 blank line contains whitespace
+.\validate_before_commit.py:209:1: W293 blank line contains whitespace
+.\validate_before_commit.py:211:1: W293 blank line contains whitespace
+.\validate_before_commit.py:218:1: W293 blank line contains whitespace
+.\validate_before_commit.py:220:1: W293 blank line contains whitespace
+.\validate_before_commit.py:227:1: W293 blank line contains whitespace
+.\validate_before_commit.py:239:21: W292 no newline at end of file
+.\validate_metalayer.py:8:1: F401 'importlib.util' imported but unused

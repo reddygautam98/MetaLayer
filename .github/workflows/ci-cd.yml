@@ -105,6 +105,14 @@ jobs:
     name: 🎯 DAG Validation & Testing
     runs-on: ubuntu-latest
     needs: code-quality
+    
+    env:
+      AIRFLOW_HOME: ${{ github.workspace }}/airflow_home
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow_password@localhost:5432/metalayer_etl
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: false
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: true
+      
     services:
       postgres:
         image: postgres:15-alpine
@@ -143,9 +151,21 @@ jobs:
           pip install "psycopg2-binary==2.9.7"
           pip install -r requirements.txt
 
-      - name: Set up Airflow environment
+      - name: Wait for PostgreSQL to be ready
         run: |
-          export AIRFLOW_HOME=$GITHUB_WORKSPACE/airflow_home
+          echo "🔄 Waiting for PostgreSQL to be ready..."
+          sudo apt-get update -y && sudo apt-get install -y postgresql-client-common postgresql-client
+          for i in {1..30}; do
+            if pg_isready -h localhost -p 5432 -U airflow; then
+              echo "✅ PostgreSQL is ready"
+              break
+            fi
+            echo "Waiting for PostgreSQL ($i/30)..."
+            sleep 2
+          done
+
+      - name: Set up Airflow environment  
+        run: |
           mkdir -p $AIRFLOW_HOME/dags
           cp -r dags/* $AIRFLOW_HOME/dags/
           cp -r include $AIRFLOW_HOME/
@@ -165,7 +185,6 @@ jobs:
       - name: Validate DAG syntax
         run: |
           echo "🔍 Validating DAG syntax..."
-          export AIRFLOW_HOME=$GITHUB_WORKSPACE/airflow_home
           python -c "
           import sys
           sys.path.append('$AIRFLOW_HOME')
@@ -187,7 +206,6 @@ jobs:
       - name: Run DAG tests
         run: |
           echo "🧪 Running DAG tests..."
-          export AIRFLOW_HOME=$GITHUB_WORKSPACE/airflow_home
           
           # Test DAG bag loading
           airflow dags list

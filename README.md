@@ -22,9 +22,9 @@ This is a **comprehensive data engineering project** focused on building an **en
 
 ## 📊 Project Performance Metrics
 
-> **Note**: Please save the performance metrics image from the attachments as `assets/images/project-performance-metrics.png`
+> **Note**: Please save the performance metrics image from the attachments as `c:\Users\reddy\OneDrive\Pictures\Screenshots\Screenshot 2025-11-09 222531.png`
 
-![Project Performance Metrics](assets/images/project-performance-metrics.png)
+![Project Performance Metrics](c:\Users\reddy\OneDrive\Pictures\Screenshots\Screenshot 2025-11-09 222531.png)
 
 ### 🏆 Key Achievements
 - **95% Processing Time Reduction**: Optimized ETL pipeline performance

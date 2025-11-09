@@ -16,9 +16,81 @@ This is a **comprehensive data engineering project** focused on building an **en
 - **🚀 Apache Airflow & Astro**: Modern orchestration using Astro Runtime for production-grade deployment
 - **📊 Medallion Architecture**: Industry-standard Bronze → Silver → Gold data layering approach  
 - **🔍 Data Quality Engineering**: Automated validation, monitoring, and data quality checks
-- **� Scalable Data Processing**: Optimized for handling large datasets with incremental processing
-- **�️ Data Engineering Best Practices**: Modular code, error handling, monitoring, and CI/CD
-- **� Modern Data Stack**: PostgreSQL, Python, SQL, and cloud-ready architecture
+- **⚡ Scalable Data Processing**: Optimized for handling large datasets with incremental processing
+- **🛠️ Data Engineering Best Practices**: Modular code, error handling, monitoring, and CI/CD
+- **🌐 Modern Data Stack**: PostgreSQL, Python, SQL, and cloud-ready architecture
+
+## 📊 Project Performance Metrics
+
+> **Note**: Please save the performance metrics image from the attachments as `assets/images/project-performance-metrics.png`
+
+![Project Performance Metrics](assets/images/project-performance-metrics.png)
+
+### 🏆 Key Achievements
+- **95% Processing Time Reduction**: Optimized ETL pipeline performance
+- **100% Data Quality Score**: Zero data loss with comprehensive validation
+- **1M+ Customer Records**: Successfully processed enterprise-scale datasets  
+- **9.6M Total Records**: Complete Bronze → Silver → Gold transformation
+
+### 📈 Layer-Specific Results
+
+| Layer | Achievement | Records Processed | Key Features |
+|-------|------------|------------------|--------------|
+| **🥉 Bronze** | Raw data ingestion | 9.6M records | Zero data loss, minimal transformation |
+| **🥈 Silver** | Data cleaning & validation | 1M unique customers | 100% quality validation, standardized formats |
+| **🥇 Gold** | Analytics-ready models | Star schema implementation | Customer Dimension (SCD Type 2), Business KPIs |
+
+## 🚀 Project Challenges & Solutions
+
+> **Note**: Please save the challenges & solutions image from the attachments as `assets/images/project-challenges-solutions.png`
+
+![Project Challenges & Solutions](assets/images/project-challenges-solutions.png)
+
+### 💪 Technical Challenges Overcome
+
+| Challenge Category | Solution Implemented |
+|-------------------|---------------------|
+| **Data Fragmentation** | Medallion Architecture with Bronze → Silver → Gold layers |
+| **Quality Issues** | Automated validation with Great Expectations |
+| **Analytics Bottlenecks** | Dimensional modeling with star schema design |
+| **Scalability Constraints** | Incremental processing and connection pooling |
+| **Compliance Requirements** | Complete audit trails and data lineage tracking |
+
+### 🔧 Technical Hurdles & Solutions
+
+- **PostgreSQL Compatibility**: Successfully resolved Airflow's Pendulum datetime object compatibility issues
+- **Risk Mitigation**: Implemented comprehensive audit trails, data lineage tracking, and robust error recovery mechanisms  
+- **Opportunities Created**: Real-time processing capabilities, automated quality monitoring, and scalable dimensional modeling
+
+## 📅 Implementation Timeline & Milestones
+
+> **Note**: Please save the implementation timeline image from the attachments as `assets/images/implementation-timeline.png`
+
+![Implementation Timeline](assets/images/implementation-timeline.png)
+
+### 🛤️ Development Roadmap
+
+| Phase | Milestone | Description |
+|-------|-----------|-------------|
+| **1️⃣ Bronze Layer Development** | Raw Data Foundation | 9.6M records processed from CRM, ERP, and Sales systems |
+| **2️⃣ Silver Layer Processing** | Data Transformation | 100% quality score achieved with 1M unique customers |
+| **3️⃣ Gold Layer Analytics** | Dimensional Modeling | Star schema with Customer Dimension (SCD Type 2) and business KPIs |
+| **4️⃣ Production Deployment** | Full Automation | Real-time monitoring, audit trails, and operational status |
+
+## 🔮 Future Roadmap & Next Steps
+
+> **Note**: Please save the future roadmap image from the attachments as `assets/images/future-roadmap.png`
+
+![Future Roadmap](assets/images/future-roadmap.png)
+
+### 🚀 Planned Enhancements
+
+| Priority | Feature | Description |
+|----------|---------|-------------|
+| **1️⃣ Machine Learning Integration** | Predictive Analytics | Automated insights generation and predictive modeling |
+| **2️⃣ Real-time Streaming** | Kafka Integration | Deploy Kafka for real-time data processing and streaming analytics |
+| **3️⃣ Advanced Analytics** | Business Intelligence | Sophisticated reporting capabilities and interactive dashboards |
+| **4️⃣ API Layer & Data Catalog** | Enterprise Integration | RESTful APIs and comprehensive data catalog for enterprise access |
 
 ## 📁 ETL Pipeline Architecture
 

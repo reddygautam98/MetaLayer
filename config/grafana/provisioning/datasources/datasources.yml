@@ -10,7 +10,7 @@ datasources:
   - name: Prometheus
     type: prometheus
     access: proxy
-    url: http://prometheus:9090
+    url: http://metalayer-prometheus:9090
     uid: prometheus
     isDefault: true
     editable: true
@@ -24,32 +24,32 @@ datasources:
   - name: PostgreSQL
     type: postgres
     access: proxy
-    url: postgres:5432
+    url: metalayer-postgres-1:5432
     uid: postgres
     database: metalayer_etl
-    user: ${POSTGRES_USER:-airflow}
+    user: airflow
     editable: true
     jsonData:
       sslmode: disable
       postgresVersion: 1500
       timescaledb: false
     secureJsonData:
-      password: ${POSTGRES_PASSWORD:-airflow}
+      password: airflow
     version: 1
 
   # PostgreSQL Airflow database
   - name: Airflow DB
     type: postgres
     access: proxy
-    url: postgres:5432
+    url: metalayer-postgres-1:5432
     uid: airflow-db
     database: airflow
-    user: ${POSTGRES_USER:-airflow}
+    user: airflow
     editable: true
     jsonData:
       sslmode: disable
       postgresVersion: 1500
       timescaledb: false
     secureJsonData:
-      password: ${POSTGRES_PASSWORD:-airflow}
+      password: airflow
     version: 1

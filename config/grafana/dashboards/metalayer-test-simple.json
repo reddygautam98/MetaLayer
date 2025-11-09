@@ -207,8 +207,8 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "MetaLayer Test Dashboard",
-  "uid": "metalayer-test",
+  "title": "MetaLayer Simple Test Dashboard",
+  "uid": "metalayer-simple-test",
   "version": 1,
   "weekStart": ""
 }

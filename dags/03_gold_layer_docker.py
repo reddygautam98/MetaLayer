@@ -66,14 +66,31 @@ default_args = {
 # =====================================================
 # DIMENSIONAL MODELING FUNCTIONS
 # =====================================================
-def build_customer_dimension(**context) -> Dict[str, Any]:
+def build_customer_dimension(**context):
     """Build customer dimension table with SCD Type 2"""
     execution_date = context["execution_date"]
     
-    # Convert Airflow execution_date (Pendulum) to Python datetime for PostgreSQL compatibility
-    execution_datetime = datetime.fromisoformat(str(execution_date).replace('+00:00', ''))
+    # Simple string-based date handling to avoid Pendulum Proxy issues
+    try:
+        # Convert execution_date to string format for PostgreSQL date comparisons
+        if hasattr(execution_date, 'strftime'):
+            execution_date_str = execution_date.strftime('%Y-%m-%d')
+        else:
+            # Parse from string representation
+            date_str = str(execution_date).split('T')[0].split(' ')[0]
+            if len(date_str.split('-')) == 3:
+                execution_date_str = date_str
+            else:
+                execution_date_str = datetime.now().strftime('%Y-%m-%d')
+        
+        # Create a proper datetime object for INSERT operations
+        execution_datetime = datetime.strptime(execution_date_str, '%Y-%m-%d')
+    except Exception as e:
+        logger.warning(f"Date conversion failed: {e}, using current date")
+        execution_date_str = datetime.now().strftime('%Y-%m-%d')
+        execution_datetime = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 
-    logger.info(f"🏗️ Building customer dimension for {execution_date}")
+    logger.info(f"🏗️ Building customer dimension for {execution_date_str}")
 
     try:
         hook = PostgresHook(postgres_conn_id="postgres_default")
@@ -103,11 +120,11 @@ def build_customer_dimension(**context) -> Dict[str, Any]:
                     data_quality_score,
                     processed_timestamp
                 FROM silver.customers_cleaned
-                WHERE DATE(processed_timestamp) >= %s - INTERVAL '%s days'
+                WHERE DATE(processed_timestamp) >= %s::date - INTERVAL '%s days'
                 ORDER BY customer_id, processed_timestamp DESC
             """
 
-            cursor.execute(silver_query, [execution_datetime.date(), LOOKBACK_DAYS])
+            cursor.execute(silver_query, [execution_date_str, LOOKBACK_DAYS])
             silver_data = cursor.fetchall()
 
             if not silver_data:
@@ -265,10 +282,27 @@ def build_order_fact_table(**context) -> Dict[str, Any]:
     """Build order fact table with aggregations"""
     execution_date = context["execution_date"]
     
-    # Convert Airflow execution_date (Pendulum) to Python datetime for PostgreSQL compatibility
-    execution_datetime = datetime.fromisoformat(str(execution_date).replace('+00:00', ''))
+    # Simple string-based date handling to avoid Pendulum Proxy issues
+    try:
+        # Convert execution_date to string format for PostgreSQL date comparisons
+        if hasattr(execution_date, 'strftime'):
+            execution_date_str = execution_date.strftime('%Y-%m-%d')
+        else:
+            # Parse from string representation
+            date_str = str(execution_date).split('T')[0].split(' ')[0]
+            if len(date_str.split('-')) == 3:
+                execution_date_str = date_str
+            else:
+                execution_date_str = datetime.now().strftime('%Y-%m-%d')
+        
+        # Create a proper datetime object for INSERT operations
+        execution_datetime = datetime.strptime(execution_date_str, '%Y-%m-%d')
+    except Exception as e:
+        logger.warning(f"Date conversion failed: {e}, using current date")
+        execution_date_str = datetime.now().strftime('%Y-%m-%d')
+        execution_datetime = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 
-    logger.info(f"📊 Building order fact table for {execution_date}")
+    logger.info(f"📊 Building order fact table for {execution_date_str}")
 
     try:
         hook = PostgresHook(postgres_conn_id="postgres_default")
@@ -311,7 +345,7 @@ def build_order_fact_table(**context) -> Dict[str, Any]:
                     total_amount = EXCLUDED.total_amount
             """
 
-            cursor.execute(fact_insert_query, [execution_datetime.date()])
+            cursor.execute(fact_insert_query, [execution_date_str])
             metrics["fact_records_created"] = cursor.rowcount
 
             # Create daily aggregations
@@ -338,7 +372,7 @@ def build_order_fact_table(**context) -> Dict[str, Any]:
                     total_quantity = EXCLUDED.total_quantity
             """
 
-            cursor.execute(daily_agg_query, [execution_datetime.date()])
+            cursor.execute(daily_agg_query, [execution_datetime])
             metrics["daily_aggregations"] = cursor.rowcount
 
             # Create monthly aggregations
@@ -369,10 +403,10 @@ def build_order_fact_table(**context) -> Dict[str, Any]:
             cursor.execute(
                 monthly_agg_query,
                 [
-                    execution_datetime.date(),
-                    execution_datetime.date(),
-                    execution_datetime.date(),
-                    execution_datetime.date(),
+                    execution_datetime,
+                    execution_datetime,
+                    execution_datetime,
+                    execution_datetime,
                 ],
             )
             metrics["monthly_aggregations"] = cursor.rowcount

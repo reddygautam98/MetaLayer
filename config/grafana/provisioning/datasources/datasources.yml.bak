@@ -1,0 +1,17 @@
+# =====================================================
+# GRAFANA DATA SOURCES PROVISIONING - SIMPLIFIED
+# Automatic setup with minimal configuration to prevent startup issues
+# =====================================================
+
+apiVersion: 1
+
+datasources:
+  # Prometheus data source for metrics (simplified)
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://metalayer-prometheus:9090
+    uid: prometheus
+    isDefault: true
+    editable: true
+    version: 1

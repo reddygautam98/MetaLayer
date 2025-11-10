@@ -123,8 +123,8 @@ services:
     container_name: etl_airflow_webserver
     environment:
       # Database Configuration
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-etl_pipeline_2024}@postgres:5432/${POSTGRES_DB:-airflow}
-      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-etl_pipeline_2024}@postgres:5432/${POSTGRES_DB:-airflow}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-postgres}:etl_secure_2024!@postgres:5432/${POSTGRES_DB:-airflow}
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER:-postgres}:etl_secure_2024!@postgres:5432/${POSTGRES_DB:-airflow}
       AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
       
       # Core Configuration
@@ -206,8 +206,8 @@ services:
     container_name: etl_airflow_scheduler
     environment:
       # Database Configuration  
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-etl_pipeline_2024}@postgres:5432/${POSTGRES_DB:-airflow}
-      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-etl_pipeline_2024}@postgres:5432/${POSTGRES_DB:-airflow}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-postgres}:etl_secure_2024!@postgres:5432/${POSTGRES_DB:-airflow}
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER:-postgres}:etl_secure_2024!@postgres:5432/${POSTGRES_DB:-airflow}
       AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
       
       # Core Configuration
@@ -269,8 +269,8 @@ services:
     container_name: etl_airflow_worker
     environment:
       # Database Configuration
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-etl_pipeline_2024}@postgres:5432/${POSTGRES_DB:-airflow}
-      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-etl_pipeline_2024}@postgres:5432/${POSTGRES_DB:-airflow}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-postgres}:etl_secure_2024!@postgres:5432/${POSTGRES_DB:-airflow}
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER:-postgres}:etl_secure_2024!@postgres:5432/${POSTGRES_DB:-airflow}
       AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
       
       # Core Configuration
@@ -358,7 +358,7 @@ services:
     container_name: etl_grafana  
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-Litureddy098@}
       GF_USERS_ALLOW_SIGN_UP: 'false'
       GF_INSTALL_PLUGINS: ""
       GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: ""
@@ -414,6 +414,63 @@ services:
           cpus: '0.2'
 
   # =====================================================
+  # POSTGRES EXPORTER
+  # =====================================================
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.13.2
+    container_name: etl_postgres_exporter
+    environment:
+      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-etl_pipeline_2024}@postgres:5432/${POSTGRES_DB:-airflow}?sslmode=disable
+    ports:
+      - "${POSTGRES_EXPORTER_PORT:-9187}:9187"
+    networks:
+      etl_pipeline_network:
+        ipv4_address: 172.20.0.34
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9187/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+
+  # =====================================================
+  # REDIS EXPORTER
+  # =====================================================
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.55.0
+    container_name: etl_redis_exporter
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    ports:
+      - "${REDIS_EXPORTER_PORT:-9121}:9121"
+    networks:
+      etl_pipeline_network:
+        ipv4_address: 172.20.0.35
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+    healthcheck:
+      test: ["CMD", "sh", "-c", "netstat -tuln | grep -q ':9121'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+
+  # =====================================================
   # ETL METRICS EXPORTER  
   # =====================================================
   etl-metrics-exporter:
@@ -436,7 +493,7 @@ services:
       - ./include/monitoring:/opt/airflow/monitoring:ro
       - ./scripts:/opt/airflow/scripts:ro
     ports:
-      - "${ETL_METRICS_PORT:-9200}:9200"
+      - "${ETL_METRICS_PORT:-8000}:8000"
     networks:
       etl_pipeline_network:
         ipv4_address: 172.20.0.33
@@ -448,10 +505,11 @@ services:
     restart: always
     command: python /opt/airflow/monitoring/metrics_exporter.py
     healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:9200/metrics"]
-      interval: 60s
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/metrics')"]
+      interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
     deploy:
       resources:
         limits:

@@ -1,0 +1,78 @@
+# =====================================================
+# PROMETHEUS CONFIGURATION - CORRECTED FOR ETL MONITORING
+# Fixed configuration to properly monitor all ETL services
+# =====================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  
+  external_labels:
+    monitor: 'etl-pipeline-monitor'
+    environment: 'docker'
+
+# Scrape configuration with working endpoints
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # ETL Custom Metrics Exporter (This works!)
+  - job_name: 'etl-metrics-exporter'
+    static_configs:
+      - targets: ['metalayer-metrics-exporter-1:8000']
+    metrics_path: /metrics
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Airflow Webserver Health Check (Fixed endpoint)
+  - job_name: 'airflow-webserver'
+    static_configs:
+      - targets: ['metalayer-webserver-1:8080']
+    metrics_path: '/health'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    # Convert health check to metric
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        target_label: __name__
+        replacement: 'airflow_health_status'
+
+  # Airflow Health as separate endpoint 
+  - job_name: 'airflow-health'
+    static_configs:
+      - targets: ['metalayer-webserver-1:8080']
+    metrics_path: '/health'
+    scrape_interval: 30s
+
+  # PostgreSQL using pg_stat_database (Custom query)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['metalayer-postgres-1:5432']
+    metrics_path: '/metrics'
+    scrape_interval: 60s
+    # Note: This will fail unless postgres_exporter is installed, but we'll keep it
+
+  # Redis using custom health check
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['metalayer-redis-1:6379'] 
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    # Note: This will fail unless redis_exporter is installed
+
+  # Docker containers - using cAdvisor if available
+  - job_name: 'docker'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 30s
+    # This will be down unless cAdvisor is running
+
+  # Node Exporter for system metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    metrics_path: /metrics
+    scrape_interval: 15s
+    # This will be down unless node-exporter is installed

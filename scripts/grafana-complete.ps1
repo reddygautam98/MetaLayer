@@ -4,7 +4,9 @@
 param(
     [Parameter(Mandatory=$true)]
     [ValidateSet("setup", "restart", "recover", "health", "datasources")]
-    [string]$Action
+    [string]$Action,
+    [Parameter(Mandatory=$false)]
+    [string]$GrafanaPassword = "Litureddy098@"
 )
 
 function Write-ColoredOutput {
@@ -86,7 +88,7 @@ switch ($Action) {
         
         if (Wait-ForGrafanaReady) {
             Write-ColoredOutput "✅ Grafana recovery successful!" "Green"
-            Write-ColoredOutput "🌐 Access: http://localhost:3000 (admin/admin)" "Cyan"
+            Write-ColoredOutput "🌐 Access: http://localhost:3000 (admin/$GrafanaPassword)" "Cyan"
         } else {
             Write-ColoredOutput "❌ Recovery failed - check logs" "Red"
             docker logs metalayer-grafana --tail 20
@@ -110,19 +112,28 @@ switch ($Action) {
     }
     
     "datasources" {
-        Write-ColoredOutput "📊 Manual Datasource Setup Instructions..." "Cyan"
+        Write-ColoredOutput "📊 Automated Datasource Setup..." "Cyan"
         
         if (Test-GrafanaHealth) {
-            Write-ColoredOutput "✅ Grafana is running" "Green"
-            Write-ColoredOutput "📝 To add datasources manually:" "White"
-            Write-ColoredOutput "  1. Go to http://localhost:3000" "Gray"
-            Write-ColoredOutput "  2. Login with admin/admin" "Gray"  
-            Write-ColoredOutput "  3. Go to Configuration > Data sources" "Gray"
-            Write-ColoredOutput "  4. Add Prometheus: http://metalayer-prometheus:9090" "Gray"
-            Write-ColoredOutput "  5. Add PostgreSQL: metalayer-postgres-1:5432" "Gray"
-            Write-ColoredOutput "     - Database: postgres" "Gray"
-            Write-ColoredOutput "     - User: postgres" "Gray"
-            Write-ColoredOutput "     - Password: postgres" "Gray"
+            Write-ColoredOutput "✅ Grafana is running - configuring datasources..." "Green"
+            
+            # Run automated datasource setup
+            try {
+                & "$PSScriptRoot\setup-grafana-datasources.ps1" -Password $GrafanaPassword
+                Write-ColoredOutput "✅ Automated datasource configuration completed!" "Green"
+                Write-ColoredOutput "🌐 Access Grafana: http://localhost:3000 (admin/$GrafanaPassword)" "Cyan"
+            } catch {
+                Write-ColoredOutput "❌ Automated setup failed: $($_.Exception.Message)" "Red"
+                Write-ColoredOutput "📝 Manual setup instructions:" "White"
+                Write-ColoredOutput "  1. Go to http://localhost:3000" "Gray"
+                Write-ColoredOutput "  2. Login with admin/$GrafanaPassword" "Gray"  
+                Write-ColoredOutput "  3. Go to Configuration > Data sources" "Gray"
+                Write-ColoredOutput "  4. Add Prometheus: http://etl_prometheus:9090" "Gray"
+                Write-ColoredOutput "  5. Add PostgreSQL: postgres:5432" "Gray"
+                Write-ColoredOutput "     - Database: airflow" "Gray"
+                Write-ColoredOutput "     - User: postgres" "Gray"
+                Write-ColoredOutput "     - Password: etl_pipeline_2024" "Gray"
+            }
         } else {
             Write-ColoredOutput "❌ Grafana is not running. Use 'setup' or 'recover' first." "Red"
         }

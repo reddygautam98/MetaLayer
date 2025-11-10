@@ -22,7 +22,7 @@ Flask-AppBuilder==4.8.1            # Security fix for transitive dependency
 # =====================================================
 # MONITORING & METRICS (LIGHTWEIGHT)
 # =====================================================  
-sqlparse==0.5.0                   # SQL parsing (security fix)
+sqlparse>=0.5.1                   # SQL parsing (security fix, compatible with airflow providers)
 python-dateutil==2.8.2            # Date processing
 prometheus-client==0.17.1         # Metrics collection
 requests==2.32.4                  # HTTP requests for monitoring (security fix)
@@ -50,8 +50,7 @@ mypy==1.8.0                       # Type checking
 # =====================================================
 # AIRFLOW EXTRAS (MINIMAL REQUIRED)
 # =====================================================
-cryptography==41.0.8              # Encryption support (security fix)
-openssl-python==0.1.1             # SSL support
+cryptography>=42.0.0              # Encryption support (Python 3.11 compatible)
 email-validator==2.1.0.post1      # Email validation
 wtforms==3.1.1                    # Form handling
 

@@ -1,10 +1,39 @@
 # =====================================================
-# GRAFANA DATA SOURCES PROVISIONING - MINIMAL CONFIG
-# Empty configuration to prevent startup issues
-# Datasources can be added manually via Grafana UI
+# GRAFANA DATA SOURCES PROVISIONING - UPDATED CONFIG
+# Auto-configured data sources for MetaLayer ETL
 # =====================================================
 
 apiVersion: 1
 
-# Empty datasources list to prevent provisioning errors
-datasources: []
+datasources:
+  # PostgreSQL Data Warehouse - Primary ETL Database
+  - name: PostgreSQL-ETL
+    type: postgres
+    access: proxy
+    url: etl_postgres:5432
+    database: airflow
+    user: postgres
+    secureJsonData:
+      password: etl_secure_2024!
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1500
+      timescaledb: false
+    isDefault: true
+    editable: true
+    
+  # Prometheus - Monitoring Metrics
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://etl_prometheus:9090
+    isDefault: false
+    editable: true
+    
+  # PostgreSQL Exporter Metrics (via Prometheus)
+  - name: PostgreSQL-Metrics
+    type: prometheus
+    access: proxy
+    url: http://etl_postgres_exporter:9187
+    isDefault: false
+    editable: true

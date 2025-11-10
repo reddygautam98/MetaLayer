@@ -89,8 +89,8 @@ class MetaLayerMetricsCollector:
             "host": os.getenv("POSTGRES_HOST", "postgres"),
             "port": int(os.getenv("POSTGRES_PORT", 5432)),
             "database": os.getenv("POSTGRES_DB", "airflow"),
-            "user": os.getenv("POSTGRES_USER", "airflow"),
-            "password": os.getenv("POSTGRES_PASSWORD", "airflow_password"),
+            "user": os.getenv("POSTGRES_USER", "postgres"),
+            "password": os.getenv("POSTGRES_PASSWORD", "etl_secure_2024!"),
         }
 
     def _setup_pipeline_info(self):
@@ -172,44 +172,52 @@ class MetaLayerMetricsCollector:
                 layers = ["bronze", "silver", "gold"]
 
                 for layer in layers:
+                    # Use separate connection for each layer to avoid transaction issues
                     try:
-                        # Get table count and record counts
-                        cur.execute(
-                            """
-                            SELECT
-                                schemaname,
-                                tablename,
-                                n_tup_ins + n_tup_upd + n_tup_del as total_activity
-                            FROM pg_stat_user_tables
-                            WHERE schemaname = %s
-                        """,
-                            (layer,),
-                        )
+                        layer_conn = self._get_db_connection()
+                        if not layer_conn:
+                            continue
+                            
+                        with layer_conn.cursor(cursor_factory=real_dict_cursor) as layer_cur:
+                            # Get table count and record counts
+                            layer_cur.execute(
+                                """
+                                SELECT
+                                    schemaname,
+                                    relname as tablename,
+                                    n_tup_ins + n_tup_upd + n_tup_del as total_activity
+                                FROM pg_stat_user_tables
+                                WHERE schemaname = %s
+                            """,
+                                (layer,),
+                            )
 
-                        tables = cur.fetchall()
+                            tables = layer_cur.fetchall()
 
-                        if tables:
-                            # Calculate quality score based on activity and completeness
-                            for table in tables:
-                                table_name = table["tablename"]
-                                activity = table["total_activity"] or 0
+                            if tables:
+                                # Calculate quality score based on activity and completeness
+                                for table in tables:
+                                    table_name = table["tablename"]
+                                    activity = table["total_activity"] or 0
 
-                                # Simple quality score: 0.9 if has recent activity, 0.7
-                                # otherwise
-                                quality_score = 0.9 if activity > 0 else 0.7
+                                    # Simple quality score: 0.9 if has recent activity, 0.7
+                                    # otherwise
+                                    quality_score = 0.9 if activity > 0 else 0.7
 
+                                    metalayer_data_quality_score.labels(
+                                        layer=layer,
+                                        table=table_name,
+                                        check_type="completeness",
+                                    ).set(quality_score)
+                            else:
+                                # No tables in layer
                                 metalayer_data_quality_score.labels(
                                     layer=layer,
-                                    table=table_name,
+                                    table="no_tables",
                                     check_type="completeness",
-                                ).set(quality_score)
-                        else:
-                            # No tables in layer
-                            metalayer_data_quality_score.labels(
-                                layer=layer,
-                                table="no_tables",
-                                check_type="completeness",
-                            ).set(0.0)
+                                ).set(0.0)
+                                
+                        layer_conn.close()
 
                     except Exception as e:
                         logger.warning(f"Could not check layer {layer}: {e}")

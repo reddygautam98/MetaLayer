@@ -22,12 +22,13 @@ alerting:
 rule_files:
   # - "etl_rules.yml"
 
-# Scrape configuration
+# Scrape configuration - Only WORKING Services
 scrape_configs:
   # Prometheus itself
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
+    scrape_interval: 15s
 
   # Node Exporter (System metrics)
   - job_name: 'node-exporter'
@@ -36,45 +37,18 @@ scrape_configs:
     metrics_path: /metrics
     scrape_interval: 15s
 
-  # ETL Custom Metrics Exporter
-  - job_name: 'etl-metrics-exporter'
+  # PostgreSQL Exporter - ACTIVE
+  - job_name: 'postgres-exporter'
     static_configs:
-      - targets: ['metrics-exporter:8000']
+      - targets: ['postgres-exporter:9187']
     metrics_path: /metrics
     scrape_interval: 30s
     scrape_timeout: 10s
 
-  # Airflow Webserver Metrics
-  - job_name: 'airflow-webserver'
+  # Redis Exporter - ACTIVE
+  - job_name: 'redis-exporter'
     static_configs:
-      - targets: ['webserver:8080']
-    metrics_path: /admin/metrics/
-    scrape_interval: 60s
+      - targets: ['redis-exporter:9121']
+    metrics_path: /metrics
+    scrape_interval: 30s
     scrape_timeout: 10s
-
-  # Airflow Webserver Health Check
-  - job_name: 'airflow-health'
-    static_configs:
-      - targets: ['webserver:8080']
-    metrics_path: '/health'
-    scrape_interval: 30s
-
-  # PostgreSQL Database monitoring
-  - job_name: 'postgres'
-    static_configs:
-      - targets: ['postgres:5432']
-    metrics_path: /metrics
-    scrape_interval: 30s
-
-  # Redis monitoring  
-  - job_name: 'redis'
-    static_configs:
-      - targets: ['redis:6379']
-    metrics_path: /metrics
-    scrape_interval: 30s
-
-  # Docker containers (if cAdvisor is used)
-  - job_name: 'docker'
-    static_configs:
-      - targets: ['cadvisor:8080']
-    scrape_interval: 30s

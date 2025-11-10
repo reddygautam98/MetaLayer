@@ -1,0 +1,103 @@
+# =====================================================
+# DOCKER COMPOSE - METRICS EXPORTERS ADDITION
+# Adds PostgreSQL, Redis, and Node exporters for complete monitoring
+# =====================================================
+
+version: '3.8'
+
+# Additional services to add to your existing docker-compose.yml
+services:
+
+  # =====================================================
+  # POSTGRESQL EXPORTER - For PostgreSQL metrics
+  # =====================================================
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: metalayer-postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://postgres:etl_pipeline_2024@metalayer-postgres-1:5432/airflow?sslmode=disable"
+      PG_EXPORTER_EXTEND_QUERY_PATH: "/etc/postgres_exporter/queries.yaml"
+    ports:
+      - "9187:9187"
+    networks:
+      - metalayer_etl_pipeline_network
+      - metalayer_monitoring_network
+    depends_on:
+      - postgres
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9187/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+
+  # =====================================================
+  # REDIS EXPORTER - For Redis metrics
+  # =====================================================
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: metalayer-redis-exporter
+    environment:
+      REDIS_ADDR: "redis://metalayer-redis-1:6379"
+      REDIS_EXPORTER_LOG_FORMAT: "txt"
+    ports:
+      - "9121:9121"
+    networks:
+      - metalayer_etl_pipeline_network
+      - metalayer_monitoring_network
+    depends_on:
+      - redis
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9121/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+
+  # =====================================================
+  # NODE EXPORTER - For system metrics
+  # =====================================================
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: metalayer-node-exporter
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    networks:
+      - metalayer_monitoring_network
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9100/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+
+# Networks (reference to existing networks)
+networks:
+  metalayer_etl_pipeline_network:
+    external: true
+  metalayer_monitoring_network:
+    external: true

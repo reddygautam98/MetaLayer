@@ -7,7 +7,7 @@ param(
     [Parameter(Mandatory=$false)]  
     [string]$Username = "admin",
     [Parameter(Mandatory=$false)]
-    [string]$Password = "admin"
+    [string]$Password = "Litureddy098@"
 )
 
 function Write-ColoredOutput {

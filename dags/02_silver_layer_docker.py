@@ -18,25 +18,15 @@ Features:
 """
 
 import logging
-import sys
 from datetime import datetime, timedelta
 from typing import Any, Dict
 
-import pandas as pd
-import psycopg2.extras
 from airflow import DAG
 from airflow.exceptions import AirflowException
 from airflow.models import Variable
 from airflow.operators.dummy import DummyOperator
 from airflow.operators.python import PythonOperator
-from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.utils.trigger_rule import TriggerRule
-
-from utils.data_quality_monitoring import DataQualityValidator
-from utils.metrics_exporter import export_pipeline_metrics
-
-# Add include path for utilities
-sys.path.append("/opt/airflow/include")
 
 # =====================================================
 # CONFIGURATION & CONSTANTS
@@ -86,9 +76,10 @@ class BusinessRuleError(AirflowException):
 # =====================================================
 # BUSINESS RULE FUNCTIONS
 # =====================================================
-def apply_customer_business_rules(df: pd.DataFrame) -> pd.DataFrame:
+def apply_customer_business_rules(df) -> Any:
     """Apply business rules to customer data"""
-
+    import pandas as pd
+    
     logger.info(f"📋 Applying customer business rules to {len(df)} records")
 
     # Email standardization
@@ -117,9 +108,10 @@ def apply_customer_business_rules(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def apply_order_business_rules(df: pd.DataFrame) -> pd.DataFrame:
+def apply_order_business_rules(df) -> Any:
     """Apply business rules to order data"""
-
+    import pandas as pd
+    
     logger.info(f"📋 Applying order business rules to {len(df)} records")
 
     # Date validation and standardization
@@ -161,6 +153,11 @@ def apply_order_business_rules(df: pd.DataFrame) -> pd.DataFrame:
 # =====================================================
 def transform_customers_bronze_to_silver(**context) -> Dict[str, Any]:
     """Transform customer data from Bronze to Silver layer"""
+    # Import heavy dependencies only when needed
+    import pandas as pd
+    import psycopg2.extras
+    from airflow.providers.postgres.hooks.postgres import PostgresHook
+    
     execution_date = context["execution_date"]
 
     logger.info(f"🔄 Starting customer transformation for {execution_date}")
@@ -334,9 +331,11 @@ def transform_customers_bronze_to_silver(**context) -> Dict[str, Any]:
         logger.info(f"✅ Customer transformation completed: {metrics}")
 
         # Export metrics
-        export_pipeline_metrics(
-            "silver_customer_transformation", metrics, execution_date
-        )
+        try:
+            from utils.metrics_exporter_simple import export_pipeline_metrics
+            export_pipeline_metrics("silver_customer_transformation", metrics, execution_date)
+        except ImportError:
+            logger.info(f"Customer transformation metrics: {metrics}")
 
         # Validate quality threshold
         if metrics["data_quality_score"] < QUALITY_THRESHOLD:
@@ -353,6 +352,10 @@ def transform_customers_bronze_to_silver(**context) -> Dict[str, Any]:
 
 def transform_orders_bronze_to_silver(**context) -> Dict[str, Any]:
     """Transform order data from Bronze to Silver layer"""
+    # Import heavy dependencies only when needed
+    import pandas as pd
+    from airflow.providers.postgres.hooks.postgres import PostgresHook
+    
     execution_date = context["execution_date"]
 
     logger.info(f"🛒 Starting order transformation for {execution_date}")
@@ -498,7 +501,11 @@ def transform_orders_bronze_to_silver(**context) -> Dict[str, Any]:
         logger.info(f"✅ Order transformation completed: {metrics}")
 
         # Export metrics
-        export_pipeline_metrics("silver_order_transformation", metrics, execution_date)
+        try:
+            from utils.metrics_exporter_simple import export_pipeline_metrics
+            export_pipeline_metrics("silver_order_transformation", metrics, execution_date)
+        except ImportError:
+            logger.info(f"Order transformation metrics: {metrics}")
 
         return metrics
 
@@ -509,13 +516,39 @@ def transform_orders_bronze_to_silver(**context) -> Dict[str, Any]:
 
 def validate_silver_layer_quality(**context) -> Dict[str, Any]:
     """Comprehensive Silver layer data quality validation"""
+    # Import heavy dependencies only when needed
+    from airflow.providers.postgres.hooks.postgres import PostgresHook
+    
     execution_date = context["execution_date"]
 
     logger.info(f"🔍 Starting Silver layer validation for {execution_date}")
 
     try:
         hook = PostgresHook(postgres_conn_id="postgres_default")
-        validator = DataQualityValidator(hook)
+        # Use simple data quality validator
+        try:
+            from utils.data_quality_simple import DataQualityValidator
+            validator = DataQualityValidator(hook)
+            run_validation_checks = validator.run_validation_checks
+        except ImportError:
+            # Fallback validation function
+            def run_validation_checks(checks):
+                results = {}
+                with hook.get_conn() as conn:
+                    cursor = conn.cursor()
+                    for check in checks:
+                        try:
+                            cursor.execute(check['query'], check.get('params', []))
+                            result = cursor.fetchone()[0]
+                            passed = True
+                            if 'expected_min' in check:
+                                passed = result >= check['expected_min']
+                            elif 'expected_max' in check:
+                                passed = result <= check['expected_max']
+                            results[check['name']] = {'passed': passed, 'value': result}
+                        except Exception as e:
+                            results[check['name']] = {'passed': False, 'error': str(e)}
+                return results
 
         validation_results = {
             "customer_quality_checks": {},
@@ -551,7 +584,7 @@ def validate_silver_layer_quality(**context) -> Dict[str, Any]:
             },
         ]
 
-        validation_results["customer_quality_checks"] = validator.run_validation_checks(
+        validation_results["customer_quality_checks"] = run_validation_checks(
             customer_checks
         )
 
@@ -581,7 +614,7 @@ def validate_silver_layer_quality(**context) -> Dict[str, Any]:
             },
         ]
 
-        validation_results["order_quality_checks"] = validator.run_validation_checks(
+        validation_results["order_quality_checks"] = run_validation_checks(
             order_checks
         )
 
@@ -600,7 +633,7 @@ def validate_silver_layer_quality(**context) -> Dict[str, Any]:
             }
         ]
 
-        validation_results["cross_table_checks"] = validator.run_validation_checks(
+        validation_results["cross_table_checks"] = run_validation_checks(
             cross_checks
         )
 
@@ -635,7 +668,11 @@ def validate_silver_layer_quality(**context) -> Dict[str, Any]:
             )
 
         # Export validation metrics
-        export_pipeline_metrics("silver_validation", validation_results, execution_date)
+        try:
+            from utils.metrics_exporter_simple import export_pipeline_metrics
+            export_pipeline_metrics("silver_validation", validation_results, execution_date)
+        except ImportError:
+            logger.info(f"Validation results: {validation_results}")
 
         return validation_results
 
@@ -646,6 +683,9 @@ def validate_silver_layer_quality(**context) -> Dict[str, Any]:
 
 def create_silver_summary_stats(**context) -> Dict[str, Any]:
     """Create summary statistics for Silver layer"""
+    # Import heavy dependencies only when needed
+    from airflow.providers.postgres.hooks.postgres import PostgresHook
+    
     execution_date = context["execution_date"]
 
     logger.info(f"📊 Creating Silver layer summary stats for {execution_date}")
@@ -778,6 +818,9 @@ def check_bronze_data_available(**context):
     Check if there is recent data in Bronze layer tables.
     This is more flexible than ExternalTaskSensor for manual triggers.
     """
+    # Import heavy dependencies only when needed
+    from airflow.providers.postgres.hooks.postgres import PostgresHook
+    
     execution_date = context["execution_date"]
     logger.info(f"🔍 Checking Bronze layer data availability for {execution_date}")
 

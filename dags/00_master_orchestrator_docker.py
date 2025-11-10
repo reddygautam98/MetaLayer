@@ -19,7 +19,6 @@ Features:
 
 import json
 import logging
-import sys
 from datetime import datetime, timedelta
 from typing import Any, Dict
 
@@ -29,13 +28,7 @@ from airflow.models import Variable
 from airflow.operators.dummy import DummyOperator
 from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
-from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.utils.trigger_rule import TriggerRule
-
-from utils.metrics_exporter import export_pipeline_metrics
-
-# Add include path for utilities
-sys.path.append("/opt/airflow/include")
 
 # =====================================================
 # CONFIGURATION & CONSTANTS
@@ -69,6 +62,9 @@ default_args = {
 # =====================================================
 def initialize_pipeline_run(**context) -> Dict[str, Any]:
     """Initialize pipeline run with metadata and validation"""
+    # Import heavy dependencies only when needed
+    from airflow.providers.postgres.hooks.postgres import PostgresHook
+    
     execution_date = context["execution_date"]
 
     logger.info(f"🚀 Initializing ETL pipeline run for {execution_date}")
@@ -152,7 +148,11 @@ def initialize_pipeline_run(**context) -> Dict[str, Any]:
             ).total_seconds(),
         }
 
-        export_pipeline_metrics("master_initialization", init_metrics, execution_date)
+        try:
+            from utils.metrics_exporter_simple import export_pipeline_metrics
+            export_pipeline_metrics("master_initialization", init_metrics, execution_date)
+        except ImportError:
+            logger.info(f"Initialization metrics: {init_metrics}")
 
         return pipeline_metadata
 
@@ -162,7 +162,7 @@ def initialize_pipeline_run(**context) -> Dict[str, Any]:
 
 
 def check_system_prerequisites(
-    hook: PostgresHook, execution_date: datetime
+    hook, execution_date: datetime
 ) -> Dict[str, Any]:
     """Check system prerequisites before pipeline execution"""
 
@@ -296,6 +296,9 @@ def check_system_prerequisites(
 
 def monitor_layer_completion(layer_name: str, **context) -> Dict[str, Any]:
     """Monitor and log completion of each layer"""
+    # Import heavy dependencies only when needed
+    from airflow.providers.postgres.hooks.postgres import PostgresHook
+    
     execution_date = context["execution_date"]
 
     logger.info(f"📋 Monitoring {layer_name} layer completion for {execution_date}")
@@ -353,7 +356,7 @@ def monitor_layer_completion(layer_name: str, **context) -> Dict[str, Any]:
 
 
 def get_layer_metrics(
-    hook: PostgresHook, layer_name: str, execution_date: datetime
+    hook, layer_name: str, execution_date: datetime
 ) -> Dict[str, Any]:
     """Get metrics for a specific layer"""
 
@@ -455,6 +458,9 @@ def get_layer_metrics(
 
 def finalize_pipeline_run(**context) -> Dict[str, Any]:
     """Finalize pipeline run with summary and cleanup"""
+    # Import heavy dependencies only when needed
+    from airflow.providers.postgres.hooks.postgres import PostgresHook
+    
     execution_date = context["execution_date"]
 
     logger.info(f"🏁 Finalizing ETL pipeline run for {execution_date}")
@@ -545,7 +551,11 @@ def finalize_pipeline_run(**context) -> Dict[str, Any]:
             )
 
         # Export final metrics
-        export_pipeline_metrics("master_finalization", final_summary, execution_date)
+        try:
+            from utils.metrics_exporter_simple import export_pipeline_metrics
+            export_pipeline_metrics("master_finalization", final_summary, execution_date)
+        except ImportError:
+            logger.info(f"Final summary: {final_summary}")
 
         return final_summary
 

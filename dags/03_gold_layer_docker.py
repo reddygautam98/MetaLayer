@@ -18,23 +18,15 @@ Features:
 """
 
 import logging
-import sys
 from datetime import datetime, timedelta
 from typing import Any, Dict
 
-import pandas as pd
 from airflow import DAG
 from airflow.exceptions import AirflowException
 from airflow.models import Variable
 from airflow.operators.dummy import DummyOperator
 from airflow.operators.python import PythonOperator
-from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.utils.trigger_rule import TriggerRule
-
-from utils.data_quality_monitoring import DataQualityValidator
-from utils.metrics_exporter import export_pipeline_metrics
-
-sys.path.append("/opt/airflow/include")
 
 # =====================================================
 # CONFIGURATION & CONSTANTS
@@ -68,6 +60,10 @@ default_args = {
 # =====================================================
 def build_customer_dimension(**context):
     """Build customer dimension table with SCD Type 2"""
+    # Import heavy dependencies only when needed
+    import pandas as pd
+    from airflow.providers.postgres.hooks.postgres import PostgresHook
+    
     execution_date = context["execution_date"]
     
     # Simple string-based date handling to avoid Pendulum Proxy issues
@@ -269,7 +265,11 @@ def build_customer_dimension(**context):
         logger.info(f"✅ Customer dimension built: {metrics}")
 
         # Export metrics
-        export_pipeline_metrics("gold_customer_dimension", metrics, execution_date)
+        try:
+            from utils.metrics_exporter_simple import export_pipeline_metrics
+            export_pipeline_metrics("gold_customer_dimension", metrics, execution_date)
+        except ImportError:
+            logger.info(f"Metrics: {metrics}")
 
         return metrics
 
@@ -280,6 +280,9 @@ def build_customer_dimension(**context):
 
 def build_order_fact_table(**context) -> Dict[str, Any]:
     """Build order fact table with aggregations"""
+    # Import heavy dependencies only when needed
+    from airflow.providers.postgres.hooks.postgres import PostgresHook
+    
     execution_date = context["execution_date"]
     
     # Simple string-based date handling to avoid Pendulum Proxy issues
@@ -420,7 +423,11 @@ def build_order_fact_table(**context) -> Dict[str, Any]:
         logger.info(f"✅ Order fact table built: {metrics}")
 
         # Export metrics
-        export_pipeline_metrics("gold_order_facts", metrics, execution_date)
+        try:
+            from utils.metrics_exporter_simple import export_pipeline_metrics
+            export_pipeline_metrics("gold_order_facts", metrics, execution_date)
+        except ImportError:
+            logger.info(f"Metrics: {metrics}")
 
         return metrics
 
@@ -431,6 +438,9 @@ def build_order_fact_table(**context) -> Dict[str, Any]:
 
 def build_business_kpis(**context) -> Dict[str, Any]:
     """Calculate and store business KPIs"""
+    # Import heavy dependencies only when needed
+    from airflow.providers.postgres.hooks.postgres import PostgresHook
+    
     execution_date = context["execution_date"]
 
     logger.info(f"📈 Building business KPIs for {execution_date}")
@@ -550,7 +560,11 @@ def build_business_kpis(**context) -> Dict[str, Any]:
         logger.info(f"✅ Business KPIs calculated: {kpi_results}")
 
         # Export metrics
-        export_pipeline_metrics("gold_business_kpis", kpi_results, execution_date)
+        try:
+            from utils.metrics_exporter_simple import export_pipeline_metrics
+            export_pipeline_metrics("gold_business_kpis", kpi_results, execution_date)
+        except ImportError:
+            logger.info(f"KPI Results: {kpi_results}")
 
         return kpi_results
 
@@ -561,13 +575,39 @@ def build_business_kpis(**context) -> Dict[str, Any]:
 
 def validate_gold_layer_quality(**context) -> Dict[str, Any]:
     """Validate Gold layer data quality and consistency"""
+    # Import heavy dependencies only when needed
+    from airflow.providers.postgres.hooks.postgres import PostgresHook
+    
     execution_date = context["execution_date"]
 
     logger.info(f"🔍 Validating Gold layer quality for {execution_date}")
 
     try:
         hook = PostgresHook(postgres_conn_id="postgres_default")
-        validator = DataQualityValidator(hook)
+        # Use simple data quality validator
+        try:
+            from utils.data_quality_simple import DataQualityValidator
+            validator = DataQualityValidator(hook)
+            run_validation_checks = validator.run_validation_checks
+        except ImportError:
+            # Fallback validation function
+            def run_validation_checks(checks):
+                results = {}
+                with hook.get_conn() as conn:
+                    cursor = conn.cursor()
+                    for check in checks:
+                        try:
+                            cursor.execute(check['query'])
+                            result = cursor.fetchone()[0]
+                            passed = True
+                            if 'expected_min' in check:
+                                passed = result >= check['expected_min']
+                            elif 'expected_max' in check:
+                                passed = result <= check['expected_max']
+                            results[check['name']] = {'passed': passed, 'value': result}
+                        except Exception as e:
+                            results[check['name']] = {'passed': False, 'error': str(e)}
+                return results
 
         validation_results = {
             "dimension_checks": {},
@@ -596,7 +636,7 @@ def validate_gold_layer_quality(**context) -> Dict[str, Any]:
             },
         ]
 
-        validation_results["dimension_checks"] = validator.run_validation_checks(
+        validation_results["dimension_checks"] = run_validation_checks(
             dimension_checks
         )
 
@@ -624,7 +664,7 @@ def validate_gold_layer_quality(**context) -> Dict[str, Any]:
             },
         ]
 
-        validation_results["fact_checks"] = validator.run_validation_checks(fact_checks)
+        validation_results["fact_checks"] = run_validation_checks(fact_checks)
 
         # KPI validations
         kpi_checks = [
@@ -638,7 +678,7 @@ def validate_gold_layer_quality(**context) -> Dict[str, Any]:
             }
         ]
 
-        validation_results["kpi_checks"] = validator.run_validation_checks(kpi_checks)
+        validation_results["kpi_checks"] = run_validation_checks(kpi_checks)
 
         # Calculate overall quality score
         all_checks = (
@@ -667,6 +707,9 @@ def validate_gold_layer_quality(**context) -> Dict[str, Any]:
 
 def generate_analytics_summary(**context) -> Dict[str, Any]:
     """Generate comprehensive analytics summary"""
+    # Import heavy dependencies only when needed
+    from airflow.providers.postgres.hooks.postgres import PostgresHook
+    
     execution_date = context["execution_date"]
 
     logger.info(f"📊 Generating analytics summary for {execution_date}")
@@ -779,6 +822,9 @@ def check_silver_data_available(**context):
     Check if there is recent data in Silver layer tables.
     This is more flexible than ExternalTaskSensor for manual triggers.
     """
+    # Import heavy dependencies only when needed
+    from airflow.providers.postgres.hooks.postgres import PostgresHook
+    
     execution_date = context["execution_date"]
     logger.info(f"🔍 Checking Silver layer data availability for {execution_date}")
 

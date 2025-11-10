@@ -1,0 +1,14 @@
+# Grafana Alerting Provisioning
+# This file ensures the alerting directory exists to prevent provisioning errors
+# Add your alerting rules and notification policies here
+
+apiVersion: 1
+
+# Contact points configuration (optional)
+contactPoints: []
+
+# Notification policies configuration (optional)  
+policies: []
+
+# Alert rules configuration (optional)
+groups: []

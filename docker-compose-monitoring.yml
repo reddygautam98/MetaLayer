@@ -95,9 +95,12 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_SECURITY_ADMIN_USER=admin
       - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_DEFAULT_APP_MODE=development
+      - GF_LOG_LEVEL=info
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./config/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
     ports:
       - "3000:3000"
     networks:
@@ -105,6 +108,12 @@ services:
     depends_on:
       - prometheus
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # =====================================================
   # AIRFLOW COMMON CONFIGURATION

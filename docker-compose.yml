@@ -354,20 +354,22 @@ services:
   # MONITORING - GRAFANA
   # =====================================================
   grafana:
-    image: grafana/grafana:10.1.0
-    container_name: etl_grafana
+    image: grafana/grafana:latest
+    container_name: etl_grafana  
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
       GF_USERS_ALLOW_SIGN_UP: 'false'
-      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource,grafana-piechart-panel
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/provisioning/dashboards/etl-overview.json
+      GF_INSTALL_PLUGINS: ""
+      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: ""
+      GF_DEFAULT_APP_MODE: development
+      GF_LOG_LEVEL: info
     ports:
       - "${GRAFANA_PORT:-3000}:3000"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
     networks:
       etl_pipeline_network:
         ipv4_address: 172.20.0.31

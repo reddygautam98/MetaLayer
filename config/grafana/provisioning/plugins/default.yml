@@ -1,0 +1,9 @@
+# Grafana Plugins Provisioning  
+# This file ensures the plugins directory exists to prevent provisioning errors
+# Configure additional plugins here if needed
+
+apiVersion: 1
+
+# No plugins configured by default
+# Add plugin configurations here if needed in the future
+apps: []
